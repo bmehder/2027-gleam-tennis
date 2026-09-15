@@ -88,6 +88,10 @@ h1 {
   text-transform: uppercase;
 }
 
+.score-header span:nth-child(n + 3) {
+  text-align: center;
+}
+
 .player-row {
   border-top: 1px solid #d8d6c8;
   background: #f8faeb;
