@@ -1,7 +1,8 @@
 # Lustre Tennis
 
-A browser-based tennis scoring app built with [Gleam](https://gleam.run/) and
-[Lustre](https://lustre.build/).
+A tennis scoring project built with [Gleam](https://gleam.run/), with a
+[Lustre](https://lustre.build/) browser application and a small
+[Mist](https://hexdocs.pm/mist/) REST API running on the BEAM.
 
 This is the third version of the same idea. Earlier versions were written in
 Elm and in TypeScript with fp-ts. Rebuilding it in Gleam was an experiment in
@@ -19,6 +20,8 @@ correctness or maintainability.
 - Supports persistent undo and redo
 - Imports and exports the time-travel timeline as JSON files
 - Displays the completed match and starts a new one
+- Includes a single-match REST API proof of concept running on the BEAM
+- Accepts point events and returns the newly derived match as JSON
 
 ## The modeling approach
 
@@ -147,32 +150,52 @@ right, the module above it becomes simpler. `Match` is small because `Set`
 already knows how a set ends, and the Lustre application stays focused on UI,
 persistence, and translating domain state for display.
 
+## Shared scoring across two targets
+
+The repository now contains two applications built around one scoring library:
+
+- The Lustre application compiles to JavaScript and runs in the browser.
+- The REST API compiles to Erlang and runs on the BEAM with Mist.
+- The target-neutral `tennis_scoring` package supplies the domain model to both.
+
+The API is deliberately a small proof of concept for one in-memory match. A
+typed actor owns an ordered list of point winners. It handles requests one at a
+time, creates a new immutable event list for each accepted point, and replays
+that list through `match.initial()` to derive the response. It never serializes
+or mutates the opaque match value.
+
+```text
+POST point event → event-log actor → replay scoring rules → JSON response
+```
+
+This separation lets another UI use the same scoring behavior without depending
+on Lustre. Database persistence, multiple match IDs, authentication, and event
+versioning are intentionally outside the proof of concept.
+
 ## Project structure
 
 ```text
-src/
-├── lustre_tennis.gleam    # Lustre model, update, view, and presentation data
-├── time_travel.gleam     # Reusable timeline type and JSON format
-├── browser/
-│   ├── local_storage.gleam
-│   ├── local_storage_ffi.mjs
-│   ├── file_transfer.gleam
-│   └── file_transfer_ffi.mjs
-└── tennis/
-    ├── player.gleam
-    ├── game.gleam
-    ├── tiebreak.gleam
-    ├── set.gleam
-    └── match.gleam
-
-test/
-├── time_travel_test.gleam
-└── tennis/
-    ├── game_test.gleam
-    ├── tiebreak_test.gleam
-    ├── set_test.gleam
-    └── match_test.gleam
+2027-lustre-tennis/          # JavaScript-targeted Lustre application
+├── src/
+│   ├── lustre_tennis.gleam
+│   ├── time_travel.gleam
+│   └── browser/
+├── packages/
+│   └── tennis_scoring/     # Target-neutral scoring library
+│       ├── src/tennis/
+│       └── test/tennis/
+└── api/                    # Erlang-targeted Mist application
+    ├── src/api/
+    │   ├── match_store.gleam
+    │   ├── match_json.gleam
+    │   └── server.gleam
+    └── test/api/
 ```
+
+The applications depend on `tennis_scoring` through local path dependencies.
+The browser package therefore sees only browser dependencies, the API package
+sees only BEAM dependencies, and the scoring package can be tested on either
+target without either application.
 
 ## Development
 
@@ -187,6 +210,33 @@ Run the tests:
 ```sh
 gleam test
 ```
+
+Run the scoring-library tests from `packages/tennis_scoring`:
+
+```sh
+gleam test --target javascript --runtime bun
+gleam test --target erlang
+```
+
+Run the API tests or start the local API from `api`:
+
+```sh
+gleam test
+gleam run -m api/server
+```
+
+With the API running, read the match or award a point:
+
+```sh
+curl http://localhost:4000/match
+
+curl -X POST \
+  -H "content-type: application/json" \
+  -d '{"winner":"player_two"}' \
+  http://localhost:4000/point
+```
+
+Restarting the API resets its in-memory event log.
 
 Create the static site in `dist`:
 

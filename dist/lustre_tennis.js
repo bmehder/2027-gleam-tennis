@@ -4774,43 +4774,7 @@ function on(name, handler) {
 function on_click(message) {
   return on("click", success(message));
 }
-
-// build/dev/javascript/lustre_tennis/browser/file_transfer_ffi.mjs
-function downloadTimestampedJson(basename, contents) {
-  const blob = new Blob([contents], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  const timestamp = new Date().toISOString().replaceAll(":", "-");
-  link.href = url;
-  link.download = `${basename}-${timestamp}.json`;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-function chooseJsonFile(onRead, onError) {
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = "application/json,.json";
-  input.addEventListener("change", async () => {
-    const file = input.files?.[0];
-    if (!file)
-      return;
-    try {
-      onRead(await file.text());
-    } catch {
-      onError();
-    }
-  });
-  input.click();
-}
-
-// build/dev/javascript/lustre_tennis/browser/file_transfer.mjs
-function download(basename, contents) {
-  return downloadTimestampedJson(basename, contents);
-}
-function choose_json(on_read, on_error) {
-  return chooseJsonFile(on_read, on_error);
-}
-// build/dev/javascript/lustre_tennis/tennis/player.mjs
+// build/dev/javascript/tennis_scoring/tennis/player.mjs
 class PlayerOne extends CustomType {
 }
 var Player$PlayerOne$const = new PlayerOne;
@@ -4825,114 +4789,7 @@ function opponent(player) {
   }
 }
 
-// build/dev/javascript/lustre_tennis/time_travel.mjs
-class Timeline extends CustomType {
-  constructor(past, future) {
-    super();
-    this.past = past;
-    this.future = future;
-  }
-}
-class InvalidTimeline extends CustomType {
-}
-var TimelineError$InvalidTimeline$const = new InvalidTimeline;
-var empty3 = /* @__PURE__ */ new Timeline(List$Empty$const, List$Empty$const);
-function encode_player(player) {
-  if (player instanceof PlayerOne) {
-    return string3("player_one");
-  } else {
-    return string3("player_two");
-  }
-}
-function serialize(timeline) {
-  let past = timeline.past;
-  let future = timeline.future;
-  let _pipe = object2(toList([
-    ["past", array2(past, encode_player)],
-    ["future", array2(future, encode_player)]
-  ]));
-  return to_string2(_pipe);
-}
-function player_decoder() {
-  let _pipe = string2;
-  return then$(_pipe, (value) => {
-    if (value === "player_one") {
-      return success(Player$PlayerOne$const);
-    } else if (value === "player_two") {
-      return success(Player$PlayerTwo$const);
-    } else {
-      return failure(Player$PlayerOne$const, "player_one or player_two");
-    }
-  });
-}
-function timeline_decoder() {
-  let players = list2(player_decoder());
-  let current_format = field("past", players, (past) => {
-    return field("future", players, (future) => {
-      return success(new Timeline(past, future));
-    });
-  });
-  let _block;
-  let _pipe = players;
-  _block = map3(_pipe, (past) => {
-    return new Timeline(past, List$Empty$const);
-  });
-  let previous_format = _block;
-  return one_of(current_format, toList([previous_format]));
-}
-function deserialize(stored) {
-  let $ = parse(stored, timeline_decoder());
-  if ($ instanceof Ok) {
-    return $;
-  } else {
-    return new Error(TimelineError$InvalidTimeline$const);
-  }
-}
-
-// build/dev/javascript/lustre_tennis/browser/local_storage_ffi.mjs
-function load(key) {
-  try {
-    return globalThis.localStorage.getItem(key) ?? "";
-  } catch {
-    return "";
-  }
-}
-function save(key, value) {
-  try {
-    globalThis.localStorage.setItem(key, value);
-  } catch {}
-}
-function remove3(key) {
-  try {
-    globalThis.localStorage.removeItem(key);
-  } catch {}
-}
-
-// build/dev/javascript/lustre_tennis/browser/local_storage.mjs
-var storage_key = "lustre-tennis-point-history";
-function load2() {
-  let $ = load(storage_key);
-  if ($ === "") {
-    return empty3;
-  } else {
-    let stored = $;
-    let $1 = deserialize(stored);
-    if ($1 instanceof Ok) {
-      let timeline = $1[0];
-      return timeline;
-    } else {
-      return empty3;
-    }
-  }
-}
-function save2(timeline) {
-  return save(storage_key, serialize(timeline));
-}
-function clear() {
-  return remove3(storage_key);
-}
-
-// build/dev/javascript/lustre_tennis/tennis/game.mjs
+// build/dev/javascript/tennis_scoring/tennis/game.mjs
 class LoveAll extends CustomType {
 }
 var Game$LoveAll$const = new LoveAll;
@@ -5135,7 +4992,7 @@ function score_text(game) {
   }
 }
 
-// build/dev/javascript/lustre_tennis/tennis/tiebreak.mjs
+// build/dev/javascript/tennis_scoring/tennis/tiebreak.mjs
 class TiebreakScore extends CustomType {
   constructor(player_one, player_two) {
     super();
@@ -5225,7 +5082,7 @@ function server(tiebreak) {
   }
 }
 
-// build/dev/javascript/lustre_tennis/tennis/set.mjs
+// build/dev/javascript/tennis_scoring/tennis/set.mjs
 class SetScore extends CustomType {
   constructor(player_one, player_two) {
     super();
@@ -5411,7 +5268,7 @@ function completed_winner(completed) {
   }
 }
 
-// build/dev/javascript/lustre_tennis/tennis/match.mjs
+// build/dev/javascript/tennis_scoring/tennis/match.mjs
 class Match extends CustomType {
   constructor(completed_sets, current_set) {
     super();
@@ -5477,6 +5334,148 @@ function current_set(match) {
 }
 function server3(match) {
   return server2(match.current_set);
+}
+
+// build/dev/javascript/lustre_tennis/browser/file_transfer_ffi.mjs
+function downloadTimestampedJson(basename, contents) {
+  const blob = new Blob([contents], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const timestamp = new Date().toISOString().replaceAll(":", "-");
+  link.href = url;
+  link.download = `${basename}-${timestamp}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+function chooseJsonFile(onRead, onError) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json,.json";
+  input.addEventListener("change", async () => {
+    const file = input.files?.[0];
+    if (!file)
+      return;
+    try {
+      onRead(await file.text());
+    } catch {
+      onError();
+    }
+  });
+  input.click();
+}
+
+// build/dev/javascript/lustre_tennis/browser/file_transfer.mjs
+function download(basename, contents) {
+  return downloadTimestampedJson(basename, contents);
+}
+function choose_json(on_read, on_error) {
+  return chooseJsonFile(on_read, on_error);
+}
+// build/dev/javascript/lustre_tennis/time_travel.mjs
+class Timeline extends CustomType {
+  constructor(past, future) {
+    super();
+    this.past = past;
+    this.future = future;
+  }
+}
+class InvalidTimeline extends CustomType {
+}
+var TimelineError$InvalidTimeline$const = new InvalidTimeline;
+var empty3 = /* @__PURE__ */ new Timeline(List$Empty$const, List$Empty$const);
+function encode_player(player) {
+  if (player instanceof PlayerOne) {
+    return string3("player_one");
+  } else {
+    return string3("player_two");
+  }
+}
+function serialize(timeline) {
+  let past = timeline.past;
+  let future = timeline.future;
+  let _pipe = object2(toList([
+    ["past", array2(past, encode_player)],
+    ["future", array2(future, encode_player)]
+  ]));
+  return to_string2(_pipe);
+}
+function player_decoder() {
+  let _pipe = string2;
+  return then$(_pipe, (value) => {
+    if (value === "player_one") {
+      return success(Player$PlayerOne$const);
+    } else if (value === "player_two") {
+      return success(Player$PlayerTwo$const);
+    } else {
+      return failure(Player$PlayerOne$const, "player_one or player_two");
+    }
+  });
+}
+function timeline_decoder() {
+  let players = list2(player_decoder());
+  let current_format = field("past", players, (past) => {
+    return field("future", players, (future) => {
+      return success(new Timeline(past, future));
+    });
+  });
+  let _block;
+  let _pipe = players;
+  _block = map3(_pipe, (past) => {
+    return new Timeline(past, List$Empty$const);
+  });
+  let previous_format = _block;
+  return one_of(current_format, toList([previous_format]));
+}
+function deserialize(stored) {
+  let $ = parse(stored, timeline_decoder());
+  if ($ instanceof Ok) {
+    return $;
+  } else {
+    return new Error(TimelineError$InvalidTimeline$const);
+  }
+}
+
+// build/dev/javascript/lustre_tennis/browser/local_storage_ffi.mjs
+function load(key) {
+  try {
+    return globalThis.localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+function save(key, value) {
+  try {
+    globalThis.localStorage.setItem(key, value);
+  } catch {}
+}
+function remove3(key) {
+  try {
+    globalThis.localStorage.removeItem(key);
+  } catch {}
+}
+
+// build/dev/javascript/lustre_tennis/browser/local_storage.mjs
+var storage_key = "lustre-tennis-point-history";
+function load2() {
+  let $ = load(storage_key);
+  if ($ === "") {
+    return empty3;
+  } else {
+    let stored = $;
+    let $1 = deserialize(stored);
+    if ($1 instanceof Ok) {
+      let timeline = $1[0];
+      return timeline;
+    } else {
+      return empty3;
+    }
+  }
+}
+function save2(timeline) {
+  return save(storage_key, serialize(timeline));
+}
+function clear() {
+  return remove3(storage_key);
 }
 
 // build/dev/javascript/lustre_tennis/lustre_tennis.mjs
