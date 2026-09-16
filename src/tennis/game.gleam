@@ -29,8 +29,8 @@ pub type GameResult {
   GameWon(Player)
 }
 
-pub type DisplayScore {
-  DisplayScore(player_one: String, player_two: String)
+pub type GameScoreText {
+  GameScoreText(player_one: String, player_two: String)
 }
 
 pub const initial = LoveAll
@@ -40,14 +40,12 @@ pub fn point_won(game: Game, by player: Player) -> GameResult {
   case game, player {
     LoveAll, PlayerOne -> GameContinues(FifteenLove)
     LoveAll, PlayerTwo -> GameContinues(LoveFifteen)
-
     FifteenLove, PlayerOne -> GameContinues(ThirtyLove)
     FifteenLove, PlayerTwo -> GameContinues(FifteenAll)
     LoveFifteen, PlayerOne -> GameContinues(FifteenAll)
     LoveFifteen, PlayerTwo -> GameContinues(LoveThirty)
     FifteenAll, PlayerOne -> GameContinues(ThirtyFifteen)
     FifteenAll, PlayerTwo -> GameContinues(FifteenThirty)
-
     ThirtyLove, PlayerOne -> GameContinues(FortyLove)
     ThirtyLove, PlayerTwo -> GameContinues(ThirtyFifteen)
     LoveThirty, PlayerOne -> GameContinues(FifteenThirty)
@@ -58,7 +56,6 @@ pub fn point_won(game: Game, by player: Player) -> GameResult {
     FifteenThirty, PlayerTwo -> GameContinues(FifteenForty)
     ThirtyAll, PlayerOne -> GameContinues(FortyThirty)
     ThirtyAll, PlayerTwo -> GameContinues(ThirtyForty)
-
     FortyLove, PlayerOne -> GameWon(PlayerOne)
     FortyLove, PlayerTwo -> GameContinues(FortyFifteen)
     LoveForty, PlayerOne -> GameContinues(FifteenForty)
@@ -71,7 +68,6 @@ pub fn point_won(game: Game, by player: Player) -> GameResult {
     FortyThirty, PlayerTwo -> GameContinues(Deuce)
     ThirtyForty, PlayerOne -> GameContinues(Deuce)
     ThirtyForty, PlayerTwo -> GameWon(PlayerTwo)
-
     Deuce, player -> GameContinues(Advantage(player))
     Advantage(PlayerOne), PlayerOne -> GameWon(PlayerOne)
     Advantage(PlayerOne), PlayerTwo -> GameContinues(Deuce)
@@ -80,25 +76,25 @@ pub fn point_won(game: Game, by player: Player) -> GameResult {
   }
 }
 
-pub fn display_score(game: Game) -> DisplayScore {
+pub fn score_text(game: Game) -> GameScoreText {
   case game {
-    LoveAll -> DisplayScore("0", "0")
-    FifteenLove -> DisplayScore("15", "0")
-    LoveFifteen -> DisplayScore("0", "15")
-    FifteenAll -> DisplayScore("15", "15")
-    ThirtyLove -> DisplayScore("30", "0")
-    LoveThirty -> DisplayScore("0", "30")
-    ThirtyFifteen -> DisplayScore("30", "15")
-    FifteenThirty -> DisplayScore("15", "30")
-    ThirtyAll -> DisplayScore("30", "30")
-    FortyLove -> DisplayScore("40", "0")
-    LoveForty -> DisplayScore("0", "40")
-    FortyFifteen -> DisplayScore("40", "15")
-    FifteenForty -> DisplayScore("15", "40")
-    FortyThirty -> DisplayScore("40", "30")
-    ThirtyForty -> DisplayScore("30", "40")
-    Deuce -> DisplayScore("40", "40")
-    Advantage(PlayerOne) -> DisplayScore("AD", "40")
-    Advantage(PlayerTwo) -> DisplayScore("40", "AD")
+    LoveAll -> GameScoreText("0", "0")
+    FifteenLove -> GameScoreText("15", "0")
+    LoveFifteen -> GameScoreText("0", "15")
+    FifteenAll -> GameScoreText("15", "15")
+    ThirtyLove -> GameScoreText("30", "0")
+    LoveThirty -> GameScoreText("0", "30")
+    ThirtyFifteen -> GameScoreText("30", "15")
+    FifteenThirty -> GameScoreText("15", "30")
+    ThirtyAll -> GameScoreText("30", "30")
+    FortyLove -> GameScoreText("40", "0")
+    LoveForty -> GameScoreText("0", "40")
+    FortyFifteen -> GameScoreText("40", "15")
+    FifteenForty -> GameScoreText("15", "40")
+    FortyThirty -> GameScoreText("40", "30")
+    ThirtyForty -> GameScoreText("30", "40")
+    Deuce -> GameScoreText("40", "40")
+    Advantage(PlayerOne) -> GameScoreText("AD", "40")
+    Advantage(PlayerTwo) -> GameScoreText("40", "AD")
   }
 }

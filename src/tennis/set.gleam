@@ -36,39 +36,43 @@ pub fn initial(server: Player) -> Set {
   PlayingGame(SetScore(0, 0), game.initial, server)
 }
 
-pub fn point_won(set: Set, by player: Player) -> SetResult {
-  case set {
+pub fn point_won(current_set: Set, by player: Player) -> SetResult {
+  case current_set {
     PlayingGame(score, current_game, server) ->
-      finish_game(score, server, game.point_won(current_game, player))
+      after_regular_game_point(
+        score,
+        server,
+        game.point_won(current_game, player),
+      )
 
     PlayingTiebreak(current_tiebreak) ->
-      finish_tiebreak(tiebreak.point_won(current_tiebreak, player))
+      after_tiebreak_point(tiebreak.point_won(current_tiebreak, player))
   }
 }
 
-pub fn score(set: Set) -> SetScore {
-  case set {
+pub fn score(current_set: Set) -> SetScore {
+  case current_set {
     PlayingGame(score, ..) -> score
     PlayingTiebreak(_) -> SetScore(6, 6)
   }
 }
 
-pub fn server(set: Set) -> Player {
-  case set {
+pub fn server(current_set: Set) -> Player {
+  case current_set {
     PlayingGame(_, _, server) -> server
     PlayingTiebreak(current_tiebreak) -> tiebreak.server(current_tiebreak)
   }
 }
 
-pub fn is_tiebreak(set: Set) -> Bool {
-  case set {
+pub fn is_tiebreak(current_set: Set) -> Bool {
+  case current_set {
     PlayingGame(..) -> False
     PlayingTiebreak(_) -> True
   }
 }
 
-pub fn current_game(set: Set) -> CurrentGame {
-  case set {
+pub fn current_game(current_set: Set) -> CurrentGame {
+  case current_set {
     PlayingGame(_, game, _) -> RegularGame(game)
     PlayingTiebreak(current_tiebreak) ->
       Tiebreak(tiebreak.score(current_tiebreak))
@@ -82,7 +86,7 @@ pub fn completed_winner(completed: CompletedSet) -> Player {
   }
 }
 
-fn finish_game(
+fn after_regular_game_point(
   score: SetScore,
   server: Player,
   result: game.GameResult,
@@ -91,22 +95,28 @@ fn finish_game(
     game.GameContinues(next_game) ->
       SetContinues(PlayingGame(score, next_game, server))
 
-    game.GameWon(winner) -> {
-      let updated_score = increment(score, winner)
-      let next_server = opponent(server)
-
-      case is_won_by(updated_score, winner), updated_score {
-        True, _ -> SetWon(RegularSet(winner, updated_score), next_server)
-        False, SetScore(6, 6) ->
-          SetContinues(PlayingTiebreak(tiebreak.initial(next_server)))
-        False, _ ->
-          SetContinues(PlayingGame(updated_score, game.initial, next_server))
-      }
-    }
+    game.GameWon(winner) -> after_game_won(score, server, winner)
   }
 }
 
-fn finish_tiebreak(result: tiebreak.TiebreakResult) -> SetResult {
+fn after_game_won(
+  score: SetScore,
+  server: Player,
+  winner: Player,
+) -> SetResult {
+  let updated_score = award_game(score, winner)
+  let next_server = opponent(server)
+
+  case is_set_won_by(updated_score, winner), updated_score {
+    True, _ -> SetWon(RegularSet(winner, updated_score), next_server)
+    False, SetScore(6, 6) ->
+      SetContinues(PlayingTiebreak(tiebreak.initial(next_server)))
+    False, _ ->
+      SetContinues(PlayingGame(updated_score, game.initial, next_server))
+  }
+}
+
+fn after_tiebreak_point(result: tiebreak.TiebreakResult) -> SetResult {
   case result {
     tiebreak.TiebreakContinues(next_tiebreak) ->
       SetContinues(PlayingTiebreak(next_tiebreak))
@@ -125,7 +135,7 @@ fn finish_tiebreak(result: tiebreak.TiebreakResult) -> SetResult {
   }
 }
 
-fn increment(score: SetScore, player: Player) -> SetScore {
+fn award_game(score: SetScore, player: Player) -> SetScore {
   case score, player {
     SetScore(player_one, player_two), PlayerOne ->
       SetScore(player_one + 1, player_two)
@@ -134,7 +144,7 @@ fn increment(score: SetScore, player: Player) -> SetScore {
   }
 }
 
-fn is_won_by(score: SetScore, player: Player) -> Bool {
+fn is_set_won_by(score: SetScore, player: Player) -> Bool {
   let SetScore(player_one, player_two) = score
   let #(winner_games, loser_games) = case player {
     PlayerOne -> #(player_one, player_two)

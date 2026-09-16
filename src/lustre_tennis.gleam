@@ -2,23 +2,32 @@ import gleam/int
 import gleam/list
 import lustre
 import lustre/attribute
+import lustre/effect.{type Effect}
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
+import persistence
 import tennis/game
 import tennis/match
 import tennis/player.{type Player, PlayerOne, PlayerTwo}
 import tennis/set
 import tennis/tiebreak
 
-type Model {
+type MatchState {
   Playing(match.Match)
   Finished(match.CompletedMatch)
 }
 
+type Model {
+  Model(state: MatchState, past: List(Player), future: List(Player))
+}
+
 type Msg {
   UserAwardedPoint(Player)
+  UserChoseUndo
+  UserChoseRedo
   UserStartedNewMatch
+  StoredHistoryLoaded(persistence.History)
 }
 
 type PlayerScore {
@@ -49,44 +58,111 @@ type SetCell {
 }
 
 pub fn main() -> Nil {
-  let app = lustre.simple(init, update, view)
+  let app = lustre.application(init, update, view)
   let assert Ok(_) = lustre.start(app, "#tennis-match", Nil)
   Nil
 }
 
-fn init(_arguments) -> Model {
-  Playing(match.initial())
+fn init(_arguments) -> #(Model, Effect(Msg)) {
+  #(
+    Model(Playing(match.initial()), [], []),
+    effect.from(fn(dispatch) {
+      persistence.load()
+      |> StoredHistoryLoaded
+      |> dispatch
+    }),
+  )
 }
 
-fn update(model: Model, message: Msg) -> Model {
-  case model, message {
-    Playing(current_match), UserAwardedPoint(player) ->
+fn update(model: Model, message: Msg) -> #(Model, Effect(Msg)) {
+  let Model(state, past, _future) = model
+
+  case state, message {
+    Playing(_), UserAwardedPoint(player) -> {
+      let next_past = list.append(past, [player])
+      let next_model = Model(award_point(state, player), next_past, [])
+      #(next_model, save_history(next_past, []))
+    }
+
+    Finished(_), UserAwardedPoint(_) -> #(model, effect.none())
+
+    _, UserChoseUndo -> undo(model)
+
+    _, UserChoseRedo -> redo(model)
+
+    _, UserStartedNewMatch -> #(
+      Model(Playing(match.initial()), [], []),
+      effect.from(fn(_) { persistence.clear() }),
+    )
+
+    _, StoredHistoryLoaded(persistence.History(stored_past, stored_future)) -> #(
+      replay(stored_past, stored_future),
+      effect.none(),
+    )
+  }
+}
+
+fn view(model: Model) -> Element(Msg) {
+  let Model(state, past, future) = model
+  let scoreboard = case state {
+    Playing(current_match) -> to_playing_scoreboard(current_match)
+    Finished(completed_match) -> to_finished_scoreboard(completed_match)
+  }
+
+  view_scoreboard(scoreboard, !list.is_empty(past), !list.is_empty(future))
+}
+
+fn award_point(state: MatchState, player: Player) -> MatchState {
+  case state {
+    Playing(current_match) ->
       case match.point_won(current_match, player) {
         match.MatchContinues(next_match) -> Playing(next_match)
         match.MatchWon(completed_match) -> Finished(completed_match)
       }
 
-    Finished(_), UserAwardedPoint(_) -> model
-    _, UserStartedNewMatch -> Playing(match.initial())
+    Finished(_) -> state
   }
 }
 
-fn view(model: Model) -> Element(Msg) {
-  case model {
-    Playing(current_match) -> view_playing(current_match)
-    Finished(completed_match) -> view_finished(completed_match)
+fn replay(past: List(Player), future: List(Player)) -> Model {
+  let state = list.fold(past, Playing(match.initial()), award_point)
+  Model(state, past, future)
+}
+
+fn undo(model: Model) -> #(Model, Effect(Msg)) {
+  let Model(_, past, future) = model
+
+  case list.reverse(past) {
+    [] -> #(model, effect.none())
+    [point, ..remaining_reversed] -> {
+      let next_past = list.reverse(remaining_reversed)
+      let next_future = [point, ..future]
+      #(replay(next_past, next_future), save_history(next_past, next_future))
+    }
   }
 }
 
-fn view_playing(current_match: match.Match) -> Element(Msg) {
-  view_scoreboard(to_playing_scoreboard(current_match))
+fn redo(model: Model) -> #(Model, Effect(Msg)) {
+  let Model(_, past, future) = model
+
+  case future {
+    [] -> #(model, effect.none())
+    [point, ..remaining] -> {
+      let next_past = list.append(past, [point])
+      #(replay(next_past, remaining), save_history(next_past, remaining))
+    }
+  }
 }
 
-fn view_finished(completed_match: match.CompletedMatch) -> Element(Msg) {
-  view_scoreboard(to_finished_scoreboard(completed_match))
+fn save_history(past: List(Player), future: List(Player)) -> Effect(Msg) {
+  effect.from(fn(_) { persistence.save(persistence.History(past, future)) })
 }
 
-fn view_scoreboard(scoreboard: Scoreboard) -> Element(Msg) {
+fn view_scoreboard(
+  scoreboard: Scoreboard,
+  can_undo: Bool,
+  can_redo: Bool,
+) -> Element(Msg) {
   let Scoreboard(player_one, player_two, match_is_complete) = scoreboard
 
   html.main([attribute.class("scoreboard")], [
@@ -112,6 +188,18 @@ fn view_scoreboard(scoreboard: Scoreboard) -> Element(Msg) {
         )
       False -> point_controls(player_one, player_two)
     },
+    history_controls(can_undo, can_redo),
+  ])
+}
+
+fn history_controls(can_undo: Bool, can_redo: Bool) -> Element(Msg) {
+  html.div([attribute.class("history-controls")], [
+    html.button([attribute.disabled(!can_undo), event.on_click(UserChoseUndo)], [
+      html.text("Undo"),
+    ]),
+    html.button([attribute.disabled(!can_redo), event.on_click(UserChoseRedo)], [
+      html.text("Redo"),
+    ]),
   ])
 }
 
@@ -284,8 +372,8 @@ fn for_player(player: Player, player_one: value, player_two: value) -> value {
 fn point_scores(current_set: set.Set) -> #(String, String) {
   case set.current_game(current_set) {
     set.RegularGame(current_game) -> {
-      let game.DisplayScore(player_one, player_two) =
-        game.display_score(current_game)
+      let game.GameScoreText(player_one, player_two) =
+        game.score_text(current_game)
       #(player_one, player_two)
     }
 
