@@ -9,12 +9,12 @@ import lustre/element.{type Element}
 import lustre/element/html
 import lustre/element/svg
 import lustre/event
-import match_history
 import tennis/game
 import tennis/match
 import tennis/player.{type Player, PlayerOne, PlayerTwo}
 import tennis/set
 import tennis/tiebreak
+import time_travel
 
 type MatchState {
   Playing(match.Match)
@@ -39,7 +39,7 @@ type Msg {
   UserStartedNewMatch
   ImportedFileRead(String)
   ImportFileReadFailed
-  StoredHistoryLoaded(match_history.History)
+  StoredTimelineLoaded(time_travel.Timeline)
 }
 
 type PlayerScore {
@@ -80,7 +80,7 @@ fn init(_arguments) -> #(Model, Effect(Msg)) {
     Model(Playing(match.initial()), [], [], False),
     effect.from(fn(dispatch) {
       local_storage.load()
-      |> StoredHistoryLoaded
+      |> StoredTimelineLoaded
       |> dispatch
     }),
   )
@@ -93,7 +93,7 @@ fn update(model: Model, message: Msg) -> #(Model, Effect(Msg)) {
     Playing(_), UserAwardedPoint(player) -> {
       let next_past = list.append(past, [player])
       let next_model = Model(award_point(state, player), next_past, [], False)
-      #(next_model, save_history(next_past, []))
+      #(next_model, save_timeline(next_past, []))
     }
 
     Finished(_), UserAwardedPoint(_) -> #(model, effect.none())
@@ -105,8 +105,8 @@ fn update(model: Model, message: Msg) -> #(Model, Effect(Msg)) {
     _, UserChoseExport -> #(
       model,
       effect.from(fn(_) {
-        match_history.History(past, future)
-        |> match_history.serialize
+        time_travel.Timeline(past, future)
+        |> time_travel.serialize
         |> file_transfer.download("tennis-match.json", _)
       }),
     )
@@ -126,11 +126,11 @@ fn update(model: Model, message: Msg) -> #(Model, Effect(Msg)) {
       effect.from(fn(_) { local_storage.clear() }),
     )
 
-    _, ImportedFileRead(contents) -> import_history(model, contents)
+    _, ImportedFileRead(contents) -> import_timeline(model, contents)
 
     _, ImportFileReadFailed -> #(with_import_error(model), effect.none())
 
-    _, StoredHistoryLoaded(match_history.History(stored_past, stored_future)) -> #(
+    _, StoredTimelineLoaded(time_travel.Timeline(stored_past, stored_future)) -> #(
       replay(stored_past, stored_future),
       effect.none(),
     )
@@ -177,7 +177,7 @@ fn undo(model: Model) -> #(Model, Effect(Msg)) {
     [point, ..remaining_reversed] -> {
       let next_past = list.reverse(remaining_reversed)
       let next_future = [point, ..future]
-      #(replay(next_past, next_future), save_history(next_past, next_future))
+      #(replay(next_past, next_future), save_timeline(next_past, next_future))
     }
   }
 }
@@ -189,26 +189,26 @@ fn redo(model: Model) -> #(Model, Effect(Msg)) {
     [] -> #(model, effect.none())
     [point, ..remaining] -> {
       let next_past = list.append(past, [point])
-      #(replay(next_past, remaining), save_history(next_past, remaining))
+      #(replay(next_past, remaining), save_timeline(next_past, remaining))
     }
   }
 }
 
-fn import_history(model: Model, contents: String) -> #(Model, Effect(Msg)) {
-  case match_history.deserialize(contents) {
+fn import_timeline(model: Model, contents: String) -> #(Model, Effect(Msg)) {
+  case time_travel.deserialize(contents) {
     Error(_) -> #(with_import_error(model), effect.none())
-    Ok(match_history.History(past, future) as history) ->
-      case history_is_valid(past, future) {
+    Ok(time_travel.Timeline(past, future) as timeline) ->
+      case timeline_is_valid(past, future) {
         False -> #(with_import_error(model), effect.none())
         True -> #(
           replay(past, future),
-          effect.from(fn(_) { local_storage.save(history) }),
+          effect.from(fn(_) { local_storage.save(timeline) }),
         )
       }
   }
 }
 
-fn history_is_valid(past: List(Player), future: List(Player)) -> Bool {
+fn timeline_is_valid(past: List(Player), future: List(Player)) -> Bool {
   can_replay(Playing(match.initial()), list.append(past, future))
 }
 
@@ -226,8 +226,8 @@ fn with_import_error(model: Model) -> Model {
   Model(state, past, future, True)
 }
 
-fn save_history(past: List(Player), future: List(Player)) -> Effect(Msg) {
-  effect.from(fn(_) { local_storage.save(match_history.History(past, future)) })
+fn save_timeline(past: List(Player), future: List(Player)) -> Effect(Msg) {
+  effect.from(fn(_) { local_storage.save(time_travel.Timeline(past, future)) })
 }
 
 fn view_scoreboard(
@@ -261,7 +261,7 @@ fn view_scoreboard(
         )
       False -> point_controls(player_one, player_two)
     },
-    history_controls(can_undo, can_redo),
+    time_travel_controls(can_undo, can_redo),
     file_controls(import_failed),
     repository_link(),
   ])
@@ -315,8 +315,8 @@ fn repository_link() -> Element(Msg) {
   )
 }
 
-fn history_controls(can_undo: Bool, can_redo: Bool) -> Element(Msg) {
-  html.div([attribute.class("history-controls")], [
+fn time_travel_controls(can_undo: Bool, can_redo: Bool) -> Element(Msg) {
+  html.div([attribute.class("time-travel-controls")], [
     html.button([attribute.disabled(!can_undo), event.on_click(UserChoseUndo)], [
       html.text("Undo"),
     ]),

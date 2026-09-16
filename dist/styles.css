@@ -144,22 +144,22 @@ h1 {
   margin-top: 1.5rem;
 }
 
-.history-controls {
+.time-travel-controls {
   display: flex;
   justify-content: center;
   gap: 0.75rem;
   margin-top: 1rem;
 }
 
-.history-controls button {
+.time-travel-controls button {
   min-width: 6rem;
   color: #17312b;
   background: transparent;
   border: 1px solid #b9c2b9;
 }
 
-.history-controls button:hover { background: #edf0eb; }
-.history-controls button:disabled:hover { background: transparent; }
+.time-travel-controls button:hover { background: #edf0eb; }
+.time-travel-controls button:disabled:hover { background: transparent; }
 
 .file-controls {
   display: flex;

@@ -4827,18 +4827,18 @@ function opponent(player) {
   }
 }
 
-// build/dev/javascript/lustre_tennis/match_history.mjs
-class History extends CustomType {
+// build/dev/javascript/lustre_tennis/time_travel.mjs
+class Timeline extends CustomType {
   constructor(past, future) {
     super();
     this.past = past;
     this.future = future;
   }
 }
-class InvalidHistory extends CustomType {
+class InvalidTimeline extends CustomType {
 }
-var HistoryError$InvalidHistory$const = new InvalidHistory;
-var empty3 = /* @__PURE__ */ new History(List$Empty$const, List$Empty$const);
+var TimelineError$InvalidTimeline$const = new InvalidTimeline;
+var empty3 = /* @__PURE__ */ new Timeline(List$Empty$const, List$Empty$const);
 function encode_player(player) {
   if (player instanceof PlayerOne) {
     return string3("player_one");
@@ -4846,9 +4846,9 @@ function encode_player(player) {
     return string3("player_two");
   }
 }
-function serialize(history) {
-  let past = history.past;
-  let future = history.future;
+function serialize(timeline) {
+  let past = timeline.past;
+  let future = timeline.future;
   let _pipe = object2(toList([
     ["past", array2(past, encode_player)],
     ["future", array2(future, encode_player)]
@@ -4867,27 +4867,27 @@ function player_decoder() {
     }
   });
 }
-function history_decoder() {
+function timeline_decoder() {
   let players = list2(player_decoder());
   let current_format = field("past", players, (past) => {
     return field("future", players, (future) => {
-      return success(new History(past, future));
+      return success(new Timeline(past, future));
     });
   });
   let _block;
   let _pipe = players;
   _block = map3(_pipe, (past) => {
-    return new History(past, List$Empty$const);
+    return new Timeline(past, List$Empty$const);
   });
   let previous_format = _block;
   return one_of(current_format, toList([previous_format]));
 }
 function deserialize(stored) {
-  let $ = parse(stored, history_decoder());
+  let $ = parse(stored, timeline_decoder());
   if ($ instanceof Ok) {
     return $;
   } else {
-    return new Error(HistoryError$InvalidHistory$const);
+    return new Error(TimelineError$InvalidTimeline$const);
   }
 }
 
@@ -4920,15 +4920,15 @@ function load2() {
     let stored = $;
     let $1 = deserialize(stored);
     if ($1 instanceof Ok) {
-      let history = $1[0];
-      return history;
+      let timeline = $1[0];
+      return timeline;
     } else {
       return empty3;
     }
   }
 }
-function save2(history) {
-  return save(storage_key, serialize(history));
+function save2(timeline) {
+  return save(storage_key, serialize(timeline));
 }
 function clear() {
   return remove3(storage_key);
@@ -5546,7 +5546,7 @@ class ImportFileReadFailed extends CustomType {
 }
 var Msg$ImportFileReadFailed$const = new ImportFileReadFailed;
 
-class StoredHistoryLoaded extends CustomType {
+class StoredTimelineLoaded extends CustomType {
   constructor($0) {
     super();
     this[0] = $0;
@@ -5628,8 +5628,8 @@ function file_controls(import_failed) {
     })()
   ]));
 }
-function history_controls(can_undo, can_redo) {
-  return div(toList([class$("history-controls")]), toList([
+function time_travel_controls(can_undo, can_redo) {
+  return div(toList([class$("time-travel-controls")]), toList([
     button(toList([
       disabled(!can_undo),
       on_click(Msg$UserChoseUndo$const)
@@ -5721,7 +5721,7 @@ function view_scoreboard(scoreboard, can_undo, can_redo, import_failed) {
         return point_controls(player_one, player_two);
       }
     })(),
-    history_controls(can_undo, can_redo),
+    time_travel_controls(can_undo, can_redo),
     file_controls(import_failed),
     repository_link()
   ]));
@@ -5898,21 +5898,21 @@ function can_replay(loop$state, loop$points) {
     }
   }
 }
-function history_is_valid(past, future) {
+function timeline_is_valid(past, future) {
   return can_replay(new Playing(initial4()), append(past, future));
 }
-function import_history(model, contents) {
+function import_timeline(model, contents) {
   let $ = deserialize(contents);
   if ($ instanceof Ok) {
-    let history = $[0];
+    let timeline = $[0];
     let past = $[0].past;
     let future = $[0].future;
-    let $1 = history_is_valid(past, future);
+    let $1 = timeline_is_valid(past, future);
     if ($1) {
       return [
         replay(past, future),
         from2((_) => {
-          return save2(history);
+          return save2(timeline);
         })
       ];
     } else {
@@ -5922,9 +5922,9 @@ function import_history(model, contents) {
     return [with_import_error(model), none()];
   }
 }
-function save_history(past, future) {
+function save_timeline(past, future) {
   return from2((_) => {
-    return save2(new History(past, future));
+    return save2(new Timeline(past, future));
   });
 }
 function redo(model) {
@@ -5936,7 +5936,7 @@ function redo(model) {
     let point = future.head;
     let remaining = future.tail;
     let next_past = append(past, toList([point]));
-    return [replay(next_past, remaining), save_history(next_past, remaining)];
+    return [replay(next_past, remaining), save_timeline(next_past, remaining)];
   }
 }
 function undo(model) {
@@ -5952,7 +5952,7 @@ function undo(model) {
     let next_future = prepend(point, future);
     return [
       replay(next_past, next_future),
-      save_history(next_past, next_future)
+      save_timeline(next_past, next_future)
     ];
   }
 }
@@ -5965,7 +5965,7 @@ function update2(model, message) {
       let player = message[0];
       let next_past = append(past, toList([player]));
       let next_model = new Model(award_point(state, player), next_past, List$Empty$const, false);
-      return [next_model, save_history(next_past, List$Empty$const)];
+      return [next_model, save_timeline(next_past, List$Empty$const)];
     } else if (message instanceof UserChoseUndo) {
       return undo(model);
     } else if (message instanceof UserChoseRedo) {
@@ -5974,7 +5974,7 @@ function update2(model, message) {
       return [
         model,
         from2((_) => {
-          let _pipe = new History(past, future);
+          let _pipe = new Timeline(past, future);
           let _pipe$1 = serialize(_pipe);
           return ((_capture) => {
             return download("tennis-match.json", _capture);
@@ -6001,7 +6001,7 @@ function update2(model, message) {
       ];
     } else if (message instanceof ImportedFileRead) {
       let contents = message[0];
-      return import_history(model, contents);
+      return import_timeline(model, contents);
     } else if (message instanceof ImportFileReadFailed) {
       return [with_import_error(model), none()];
     } else {
@@ -6019,7 +6019,7 @@ function update2(model, message) {
     return [
       model,
       from2((_) => {
-        let _pipe = new History(past, future);
+        let _pipe = new Timeline(past, future);
         let _pipe$1 = serialize(_pipe);
         return ((_capture) => {
           return download("tennis-match.json", _capture);
@@ -6046,7 +6046,7 @@ function update2(model, message) {
     ];
   } else if (message instanceof ImportedFileRead) {
     let contents = message[0];
-    return import_history(model, contents);
+    return import_timeline(model, contents);
   } else if (message instanceof ImportFileReadFailed) {
     return [with_import_error(model), none()];
   } else {
@@ -6060,7 +6060,7 @@ function init(_) {
     new Model(new Playing(initial4()), List$Empty$const, List$Empty$const, false),
     from2((dispatch) => {
       let _pipe = load2();
-      let _pipe$1 = new StoredHistoryLoaded(_pipe);
+      let _pipe$1 = new StoredTimelineLoaded(_pipe);
       return dispatch(_pipe$1);
     })
   ];
@@ -6071,10 +6071,10 @@ function main2() {
   if (!($ instanceof Ok)) {
     throw makeError("let_assert", FILEPATH, "lustre_tennis", 74, "main", "Pattern match failed, no pattern matched the value.", {
       value: $,
-      start: 1382,
-      end: 1440,
-      pattern_start: 1393,
-      pattern_end: 1398
+      start: 1380,
+      end: 1438,
+      pattern_start: 1391,
+      pattern_end: 1396
     });
   }
   return;

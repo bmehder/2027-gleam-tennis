@@ -2,18 +2,18 @@ import gleam/dynamic/decode
 import gleam/json
 import tennis/player.{type Player, PlayerOne, PlayerTwo}
 
-pub type History {
-  History(past: List(Player), future: List(Player))
+pub type Timeline {
+  Timeline(past: List(Player), future: List(Player))
 }
 
-pub type HistoryError {
-  InvalidHistory
+pub type TimelineError {
+  InvalidTimeline
 }
 
-pub const empty = History([], [])
+pub const empty = Timeline([], [])
 
-pub fn serialize(history: History) -> String {
-  let History(past, future) = history
+pub fn serialize(timeline: Timeline) -> String {
+  let Timeline(past, future) = timeline
 
   json.object([
     #("past", json.array(past, of: encode_player)),
@@ -22,10 +22,10 @@ pub fn serialize(history: History) -> String {
   |> json.to_string
 }
 
-pub fn deserialize(stored: String) -> Result(History, HistoryError) {
-  case json.parse(stored, history_decoder()) {
-    Ok(history) -> Ok(history)
-    Error(_) -> Error(InvalidHistory)
+pub fn deserialize(stored: String) -> Result(Timeline, TimelineError) {
+  case json.parse(stored, timeline_decoder()) {
+    Ok(timeline) -> Ok(timeline)
+    Error(_) -> Error(InvalidTimeline)
   }
 }
 
@@ -47,14 +47,14 @@ fn player_decoder() -> decode.Decoder(Player) {
   })
 }
 
-fn history_decoder() -> decode.Decoder(History) {
+fn timeline_decoder() -> decode.Decoder(Timeline) {
   let players = decode.list(of: player_decoder())
   let current_format = {
     use past <- decode.field("past", players)
     use future <- decode.field("future", players)
-    decode.success(History(past, future))
+    decode.success(Timeline(past, future))
   }
-  let previous_format = players |> decode.map(fn(past) { History(past, []) })
+  let previous_format = players |> decode.map(fn(past) { Timeline(past, []) })
 
   decode.one_of(current_format, or: [previous_format])
 }

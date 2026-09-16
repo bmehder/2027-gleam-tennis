@@ -1,20 +1,21 @@
-import match_history.{type History}
+import time_travel.{type Timeline}
 
+// Keep this key stable so existing saved matches continue to load.
 const storage_key = "lustre-tennis-point-history"
 
-pub fn load() -> History {
+pub fn load() -> Timeline {
   case load_item(storage_key) {
-    "" -> match_history.empty
+    "" -> time_travel.empty
     stored ->
-      case match_history.deserialize(stored) {
-        Ok(history) -> history
-        Error(_) -> match_history.empty
+      case time_travel.deserialize(stored) {
+        Ok(timeline) -> timeline
+        Error(_) -> time_travel.empty
       }
   }
 }
 
-pub fn save(history: History) -> Nil {
-  save_item(storage_key, match_history.serialize(history))
+pub fn save(timeline: Timeline) -> Nil {
+  save_item(storage_key, time_travel.serialize(timeline))
 }
 
 pub fn clear() -> Nil {

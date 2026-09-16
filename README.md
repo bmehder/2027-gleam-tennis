@@ -17,7 +17,7 @@ correctness or maintainability.
 - Assumes Player One serves first in the match
 - Persists the match in browser local storage
 - Supports persistent undo and redo
-- Imports and exports match history as JSON files
+- Imports and exports the time-travel timeline as JSON files
 - Displays the completed match and starts a new one
 
 ## The modeling approach
@@ -71,7 +71,7 @@ update: Model + Msg → #(Model, Effect(Msg))
 
 The update function still decides what should happen, but browser work is
 described as an `Effect` and performed by the Lustre runtime. An effect can later
-dispatch another message, such as `StoredHistoryLoaded` or `ImportedFileRead`,
+dispatch another message, such as `StoredTimelineLoaded` or `ImportedFileRead`,
 and that message returns through the normal update loop.
 
 This keeps the architecture explicit:
@@ -86,10 +86,10 @@ This keeps the architecture explicit:
 API while the application had no effects; `lustre.application` became the right
 API when the application gained them.
 
-## Persistence, undo, and redo
+## Persistence and time travel
 
-The app does not serialize the opaque match model. It stores the history of
-point winners instead:
+The app does not serialize the opaque match model. It stores a timeline of point
+winners instead:
 
 ```json
 {
@@ -98,11 +98,11 @@ point winners instead:
 }
 ```
 
-When the page loads—or when the user undoes or redoes a point—the history is
+When the page loads—or when the user undoes or redoes a point—the timeline is
 replayed through the same domain functions used during normal scoring. That
 means restored state is subject to the same rules as live state.
 
-This event-history representation also made undo and redo straightforward:
+This event timeline also made undo and redo straightforward:
 
 - Undo moves the latest point from `past` to `future`.
 - Redo moves the next point from `future` back to `past`.
@@ -110,7 +110,7 @@ This event-history representation also made undo and redo straightforward:
 
 Browser storage and file access are isolated in small JavaScript FFI files.
 JSON encoding, decoding, validation, and storage policy remain in Gleam. The
-history format is independent of local storage, so the same representation is
+timeline format is independent of local storage, so the same representation is
 used for persistence, import, export, and tests.
 
 ## What we learned from the three versions
@@ -152,7 +152,7 @@ persistence, and translating domain state for display.
 ```text
 src/
 ├── lustre_tennis.gleam    # Lustre model, update, view, and presentation data
-├── match_history.gleam    # Reusable history type and JSON format
+├── time_travel.gleam     # Reusable timeline type and JSON format
 ├── browser/
 │   ├── local_storage.gleam
 │   ├── local_storage_ffi.mjs
@@ -166,7 +166,7 @@ src/
     └── match.gleam
 
 test/
-├── match_history_test.gleam
+├── time_travel_test.gleam
 └── tennis/
     ├── game_test.gleam
     ├── tiebreak_test.gleam
