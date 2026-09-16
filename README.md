@@ -52,6 +52,40 @@ regular games and tiebreaks, updates the game count, changes servers, and decide
 whether to begin another game, begin a tiebreak, or complete the set. `Match`
 then stays small because it only needs to coordinate completed sets.
 
+## From `lustre.simple` to `lustre.application`
+
+The first working version used `lustre.simple`. At that stage, every message
+could be handled by returning a new model:
+
+```text
+update: Model + Msg → Model
+```
+
+Local storage introduced communication with the outside world. Importing and
+exporting files added more of the same. Those operations are effects, so the app
+moved to `lustre.application`:
+
+```text
+update: Model + Msg → #(Model, Effect(Msg))
+```
+
+The update function still decides what should happen, but browser work is
+described as an `Effect` and performed by the Lustre runtime. An effect can later
+dispatch another message, such as `StoredHistoryLoaded` or `ImportedFileRead`,
+and that message returns through the normal update loop.
+
+This keeps the architecture explicit:
+
+- The model contains application state.
+- Messages describe events.
+- Update performs deterministic state transitions and requests effects.
+- Effects cross browser boundaries and report their results as messages.
+- The view renders the current model.
+
+`lustre.simple` was not a prototype that had to be discarded. It was the right
+API while the application had no effects; `lustre.application` became the right
+API when the application gained them.
+
 ## Persistence, undo, and redo
 
 The app does not serialize the opaque match model. It stores the history of
