@@ -152,11 +152,12 @@ persistence, and translating domain state for display.
 ```text
 src/
 ├── lustre_tennis.gleam    # Lustre model, update, view, and presentation data
-├── match_history.gleam     # Reusable history type and JSON format
-├── persistence.gleam       # Local-storage policy
-├── persistence_ffi.mjs    # Browser local-storage boundary
-├── file_transfer.gleam     # Import and export interface
-├── file_transfer_ffi.mjs  # Browser file boundary
+├── match_history.gleam    # Reusable history type and JSON format
+├── browser/
+│   ├── local_storage.gleam
+│   ├── local_storage_ffi.mjs
+│   ├── file_transfer.gleam
+│   └── file_transfer_ffi.mjs
 └── tennis/
     ├── player.gleam
     ├── game.gleam

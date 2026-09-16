@@ -4778,7 +4778,7 @@ function on_click(message) {
   return on("click", success(message));
 }
 
-// build/dev/javascript/lustre_tennis/file_transfer_ffi.mjs
+// build/dev/javascript/lustre_tennis/browser/file_transfer_ffi.mjs
 function downloadText(filename, contents) {
   const blob = new Blob([contents], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -4805,7 +4805,7 @@ function chooseJsonFile(onRead, onError) {
   input.click();
 }
 
-// build/dev/javascript/lustre_tennis/file_transfer.mjs
+// build/dev/javascript/lustre_tennis/browser/file_transfer.mjs
 function download(filename, contents) {
   return downloadText(filename, contents);
 }
@@ -4891,7 +4891,7 @@ function deserialize(stored) {
   }
 }
 
-// build/dev/javascript/lustre_tennis/persistence_ffi.mjs
+// build/dev/javascript/lustre_tennis/browser/local_storage_ffi.mjs
 function load(key) {
   try {
     return globalThis.localStorage.getItem(key) ?? "";
@@ -4910,7 +4910,7 @@ function remove3(key) {
   } catch {}
 }
 
-// build/dev/javascript/lustre_tennis/persistence.mjs
+// build/dev/javascript/lustre_tennis/browser/local_storage.mjs
 var storage_key = "lustre-tennis-point-history";
 function load2() {
   let $ = load(storage_key);
@@ -6071,10 +6071,10 @@ function main2() {
   if (!($ instanceof Ok)) {
     throw makeError("let_assert", FILEPATH, "lustre_tennis", 74, "main", "Pattern match failed, no pattern matched the value.", {
       value: $,
-      start: 1364,
-      end: 1422,
-      pattern_start: 1375,
-      pattern_end: 1380
+      start: 1382,
+      end: 1440,
+      pattern_start: 1393,
+      pattern_end: 1398
     });
   }
   return;

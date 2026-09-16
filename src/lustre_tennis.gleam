@@ -1,4 +1,5 @@
-import file_transfer
+import browser/file_transfer
+import browser/local_storage
 import gleam/int
 import gleam/list
 import lustre
@@ -9,7 +10,6 @@ import lustre/element/html
 import lustre/element/svg
 import lustre/event
 import match_history
-import persistence
 import tennis/game
 import tennis/match
 import tennis/player.{type Player, PlayerOne, PlayerTwo}
@@ -79,7 +79,7 @@ fn init(_arguments) -> #(Model, Effect(Msg)) {
   #(
     Model(Playing(match.initial()), [], [], False),
     effect.from(fn(dispatch) {
-      persistence.load()
+      local_storage.load()
       |> StoredHistoryLoaded
       |> dispatch
     }),
@@ -123,7 +123,7 @@ fn update(model: Model, message: Msg) -> #(Model, Effect(Msg)) {
 
     _, UserStartedNewMatch -> #(
       Model(Playing(match.initial()), [], [], False),
-      effect.from(fn(_) { persistence.clear() }),
+      effect.from(fn(_) { local_storage.clear() }),
     )
 
     _, ImportedFileRead(contents) -> import_history(model, contents)
@@ -202,7 +202,7 @@ fn import_history(model: Model, contents: String) -> #(Model, Effect(Msg)) {
         False -> #(with_import_error(model), effect.none())
         True -> #(
           replay(past, future),
-          effect.from(fn(_) { persistence.save(history) }),
+          effect.from(fn(_) { local_storage.save(history) }),
         )
       }
   }
@@ -227,7 +227,7 @@ fn with_import_error(model: Model) -> Model {
 }
 
 fn save_history(past: List(Player), future: List(Player)) -> Effect(Msg) {
-  effect.from(fn(_) { persistence.save(match_history.History(past, future)) })
+  effect.from(fn(_) { local_storage.save(match_history.History(past, future)) })
 }
 
 fn view_scoreboard(

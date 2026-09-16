@@ -21,11 +21,11 @@ pub fn clear() -> Nil {
   remove_item(storage_key)
 }
 
-@external(javascript, "./persistence_ffi.mjs", "load")
+@external(javascript, "./local_storage_ffi.mjs", "load")
 fn load_item(key: String) -> String
 
-@external(javascript, "./persistence_ffi.mjs", "save")
+@external(javascript, "./local_storage_ffi.mjs", "save")
 fn save_item(key: String, value: String) -> Nil
 
-@external(javascript, "./persistence_ffi.mjs", "remove")
+@external(javascript, "./local_storage_ffi.mjs", "remove")
 fn remove_item(key: String) -> Nil
