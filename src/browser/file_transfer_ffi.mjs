@@ -1,10 +1,11 @@
-export function downloadText(filename, contents) {
+export function downloadTimestampedJson(basename, contents) {
   const blob = new Blob([contents], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
+  const timestamp = new Date().toISOString().replaceAll(":", "-");
 
   link.href = url;
-  link.download = filename;
+  link.download = `${basename}-${timestamp}.json`;
   link.click();
   URL.revokeObjectURL(url);
 }

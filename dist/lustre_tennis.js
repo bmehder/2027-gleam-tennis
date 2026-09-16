@@ -501,9 +501,6 @@ function reverse_and_prepend(loop$prefix, loop$suffix) {
 function reverse(list) {
   return reverse_and_prepend(list, List$Empty$const);
 }
-function is_empty2(list) {
-  return list instanceof Empty;
-}
 function filter_loop(loop$list, loop$fun, loop$acc) {
   while (true) {
     let list = loop$list;
@@ -4779,12 +4776,13 @@ function on_click(message) {
 }
 
 // build/dev/javascript/lustre_tennis/browser/file_transfer_ffi.mjs
-function downloadText(filename, contents) {
+function downloadTimestampedJson(basename, contents) {
   const blob = new Blob([contents], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
+  const timestamp = new Date().toISOString().replaceAll(":", "-");
   link.href = url;
-  link.download = filename;
+  link.download = `${basename}-${timestamp}.json`;
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -4806,8 +4804,8 @@ function chooseJsonFile(onRead, onError) {
 }
 
 // build/dev/javascript/lustre_tennis/browser/file_transfer.mjs
-function download(filename, contents) {
-  return downloadText(filename, contents);
+function download(basename, contents) {
+  return downloadTimestampedJson(basename, contents);
 }
 function choose_json(on_read, on_error) {
   return chooseJsonFile(on_read, on_error);
@@ -5499,14 +5497,22 @@ class Finished extends CustomType {
 }
 
 class Model extends CustomType {
-  constructor(state, past, future, import_failed) {
+  constructor(state, past, future, import_status) {
     super();
     this.state = state;
     this.past = past;
     this.future = future;
-    this.import_failed = import_failed;
+    this.import_status = import_status;
   }
 }
+
+class ImportOkay extends CustomType {
+}
+var ImportStatus$ImportOkay$const = new ImportOkay;
+
+class ImportFailed extends CustomType {
+}
+var ImportStatus$ImportFailed$const = new ImportFailed;
 
 class UserAwardedPoint extends CustomType {
   constructor($0) {
@@ -5554,25 +5560,52 @@ class StoredTimelineLoaded extends CustomType {
 }
 
 class PlayerScore extends CustomType {
-  constructor(player, name, sets, points, is_serving, is_winner) {
+  constructor(player, name, sets, points, status) {
     super();
     this.player = player;
     this.name = name;
     this.sets = sets;
     this.points = points;
-    this.is_serving = is_serving;
-    this.is_winner = is_winner;
+    this.status = status;
   }
 }
 
+class Unmarked extends CustomType {
+}
+var PlayerStatus$Unmarked$const = new Unmarked;
+
+class CurrentServer extends CustomType {
+}
+var PlayerStatus$CurrentServer$const = new CurrentServer;
+
+class MatchWinner extends CustomType {
+}
+var PlayerStatus$MatchWinner$const = new MatchWinner;
+
 class Scoreboard extends CustomType {
-  constructor(player_one, player_two, match_is_complete) {
+  constructor(player_one, player_two, status) {
     super();
     this.player_one = player_one;
     this.player_two = player_two;
-    this.match_is_complete = match_is_complete;
+    this.status = status;
   }
 }
+
+class MatchInProgress extends CustomType {
+}
+var ScoreboardStatus$MatchInProgress$const = new MatchInProgress;
+
+class MatchComplete extends CustomType {
+}
+var ScoreboardStatus$MatchComplete$const = new MatchComplete;
+
+class Available extends CustomType {
+}
+var ControlAvailability$Available$const = new Available;
+
+class Unavailable extends CustomType {
+}
+var ControlAvailability$Unavailable$const = new Unavailable;
 
 class SetColumns extends CustomType {
   constructor(first, second, third) {
@@ -5588,6 +5621,13 @@ class SetCell extends CustomType {
     super();
     this.games = games;
     this.tiebreak_points = tiebreak_points;
+  }
+}
+function control_availability(items) {
+  if (items instanceof Empty) {
+    return ControlAvailability$Unavailable$const;
+  } else {
+    return ControlAvailability$Available$const;
   }
 }
 function repository_link() {
@@ -5608,34 +5648,34 @@ function repository_link() {
     ]))
   ]));
 }
-function file_controls(import_failed) {
+function file_controls(import_status) {
   return div(toList([class$("file-section")]), toList([
     div(toList([class$("file-controls")]), toList([
       button(toList([on_click(Msg$UserChoseImport$const)]), toList([text3("Import")])),
       button(toList([on_click(Msg$UserChoseExport$const)]), toList([text3("Export")]))
     ])),
     (() => {
-      if (import_failed) {
+      if (import_status instanceof ImportOkay) {
+        return none2();
+      } else {
         return p(toList([
           class$("import-error"),
           attribute2("role", "alert")
         ]), toList([
           text3("That file does not contain a valid tennis match.")
         ]));
-      } else {
-        return none2();
       }
     })()
   ]));
 }
-function time_travel_controls(can_undo, can_redo) {
+function time_travel_controls(undo, redo) {
   return div(toList([class$("time-travel-controls")]), toList([
     button(toList([
-      disabled(!can_undo),
+      disabled(undo instanceof Unavailable),
       on_click(Msg$UserChoseUndo$const)
     ]), toList([text3("Undo")])),
     button(toList([
-      disabled(!can_redo),
+      disabled(redo instanceof Unavailable),
       on_click(Msg$UserChoseRedo$const)
     ]), toList([text3("Redo")]))
   ]));
@@ -5667,18 +5707,22 @@ function player_row(score) {
   let second = $.second;
   let third = $.third;
   let _block;
-  let $1 = score.is_winner;
-  if ($1) {
-    _block = "score-row player-row match-winner";
-  } else {
+  let $1 = score.status;
+  if ($1 instanceof Unmarked) {
     _block = "score-row player-row";
+  } else if ($1 instanceof CurrentServer) {
+    _block = "score-row player-row";
+  } else {
+    _block = "score-row player-row match-winner";
   }
   let row_class = _block;
   return div(toList([class$(row_class)]), toList([
     span(toList([class$("serve-marker")]), toList([
       text3((() => {
-        let $2 = score.is_serving;
-        if ($2) {
+        let $2 = score.status;
+        if ($2 instanceof Unmarked) {
+          return "";
+        } else if ($2 instanceof CurrentServer) {
           return "●";
         } else {
           return "";
@@ -5692,10 +5736,10 @@ function player_row(score) {
     span(toList([class$("points-score")]), toList([text3(score.points)]))
   ]));
 }
-function view_scoreboard(scoreboard, can_undo, can_redo, import_failed) {
+function view_scoreboard(scoreboard, undo, redo, import_status) {
   let player_one = scoreboard.player_one;
   let player_two = scoreboard.player_two;
-  let match_is_complete = scoreboard.match_is_complete;
+  let status = scoreboard.status;
   return main(toList([class$("scoreboard")]), toList([
     p(toList([class$("eyebrow")]), toList([text3("CENTRE COURT")])),
     h1(List$Empty$const, toList([text3("Lustre Tennis")])),
@@ -5712,19 +5756,27 @@ function view_scoreboard(scoreboard, can_undo, can_redo, import_failed) {
       player_row(player_two)
     ])),
     (() => {
-      if (match_is_complete) {
+      if (status instanceof MatchInProgress) {
+        return point_controls(player_one, player_two);
+      } else {
         return button(toList([
           class$("new-match"),
           on_click(Msg$UserStartedNewMatch$const)
         ]), toList([text3("Start a new match")]));
-      } else {
-        return point_controls(player_one, player_two);
       }
     })(),
-    time_travel_controls(can_undo, can_redo),
-    file_controls(import_failed),
+    time_travel_controls(undo, redo),
+    file_controls(import_status),
     repository_link()
   ]));
+}
+function completed_player_status(player, winner) {
+  let $ = isEqual(player, winner);
+  if ($) {
+    return PlayerStatus$MatchWinner$const;
+  } else {
+    return PlayerStatus$Unmarked$const;
+  }
 }
 function to_set_columns(cells) {
   let empty = new SetCell("–", "");
@@ -5801,7 +5853,15 @@ function player_name(player) {
 function to_finished_scoreboard(completed_match) {
   let winner = completed_match.winner;
   let completed_sets = completed_match.sets;
-  return new Scoreboard(new PlayerScore(Player$PlayerOne$const, player_name(Player$PlayerOne$const), completed_set_columns(completed_sets, Player$PlayerOne$const), "–", false, winner instanceof PlayerOne), new PlayerScore(Player$PlayerTwo$const, player_name(Player$PlayerTwo$const), completed_set_columns(completed_sets, Player$PlayerTwo$const), "–", false, winner instanceof PlayerTwo), true);
+  return new Scoreboard(new PlayerScore(Player$PlayerOne$const, player_name(Player$PlayerOne$const), completed_set_columns(completed_sets, Player$PlayerOne$const), "–", completed_player_status(Player$PlayerOne$const, winner)), new PlayerScore(Player$PlayerTwo$const, player_name(Player$PlayerTwo$const), completed_set_columns(completed_sets, Player$PlayerTwo$const), "–", completed_player_status(Player$PlayerTwo$const, winner)), ScoreboardStatus$MatchComplete$const);
+}
+function playing_player_status(player, server) {
+  let $ = isEqual(player, server);
+  if ($) {
+    return PlayerStatus$CurrentServer$const;
+  } else {
+    return PlayerStatus$Unmarked$const;
+  }
 }
 function current_set_cell(current_set, player) {
   let $ = score2(current_set);
@@ -5839,13 +5899,13 @@ function to_playing_scoreboard(current_match) {
   let player_two_points = $[1];
   let server = server3(current_match);
   let completed_sets2 = completed_sets(current_match);
-  return new Scoreboard(new PlayerScore(Player$PlayerOne$const, player_name(Player$PlayerOne$const), playing_set_columns(completed_sets2, current_set2, Player$PlayerOne$const), player_one_points, server instanceof PlayerOne, false), new PlayerScore(Player$PlayerTwo$const, player_name(Player$PlayerTwo$const), playing_set_columns(completed_sets2, current_set2, Player$PlayerTwo$const), player_two_points, server instanceof PlayerTwo, false), false);
+  return new Scoreboard(new PlayerScore(Player$PlayerOne$const, player_name(Player$PlayerOne$const), playing_set_columns(completed_sets2, current_set2, Player$PlayerOne$const), player_one_points, playing_player_status(Player$PlayerOne$const, server)), new PlayerScore(Player$PlayerTwo$const, player_name(Player$PlayerTwo$const), playing_set_columns(completed_sets2, current_set2, Player$PlayerTwo$const), player_two_points, playing_player_status(Player$PlayerTwo$const, server)), ScoreboardStatus$MatchInProgress$const);
 }
 function view(model) {
   let state = model.state;
   let past = model.past;
   let future = model.future;
-  let import_failed = model.import_failed;
+  let import_status = model.import_status;
   let _block;
   if (state instanceof Playing) {
     let current_match = state[0];
@@ -5855,7 +5915,7 @@ function view(model) {
     _block = to_finished_scoreboard(completed_match);
   }
   let scoreboard = _block;
-  return view_scoreboard(scoreboard, !is_empty2(past), !is_empty2(future), import_failed);
+  return view_scoreboard(scoreboard, control_availability(past), control_availability(future), import_status);
 }
 function award_point(state, player) {
   if (state instanceof Playing) {
@@ -5874,13 +5934,13 @@ function award_point(state, player) {
 }
 function replay(past, future) {
   let state = fold2(past, new Playing(initial4()), award_point);
-  return new Model(state, past, future, false);
+  return new Model(state, past, future, ImportStatus$ImportOkay$const);
 }
 function with_import_error(model) {
   let state = model.state;
   let past = model.past;
   let future = model.future;
-  return new Model(state, past, future, true);
+  return new Model(state, past, future, ImportStatus$ImportFailed$const);
 }
 function can_replay(loop$state, loop$points) {
   while (true) {
@@ -5964,7 +6024,7 @@ function update2(model, message) {
     if (message instanceof UserAwardedPoint) {
       let player = message[0];
       let next_past = append(past, toList([player]));
-      let next_model = new Model(award_point(state, player), next_past, List$Empty$const, false);
+      let next_model = new Model(award_point(state, player), next_past, List$Empty$const, ImportStatus$ImportOkay$const);
       return [next_model, save_timeline(next_past, List$Empty$const)];
     } else if (message instanceof UserChoseUndo) {
       return undo(model);
@@ -5977,7 +6037,7 @@ function update2(model, message) {
           let _pipe = new Timeline(past, future);
           let _pipe$1 = serialize(_pipe);
           return ((_capture) => {
-            return download("tennis-match.json", _capture);
+            return download("tennis-match", _capture);
           })(_pipe$1);
         })
       ];
@@ -5994,7 +6054,7 @@ function update2(model, message) {
       ];
     } else if (message instanceof UserStartedNewMatch) {
       return [
-        new Model(new Playing(initial4()), List$Empty$const, List$Empty$const, false),
+        new Model(new Playing(initial4()), List$Empty$const, List$Empty$const, ImportStatus$ImportOkay$const),
         from2((_) => {
           return clear();
         })
@@ -6022,7 +6082,7 @@ function update2(model, message) {
         let _pipe = new Timeline(past, future);
         let _pipe$1 = serialize(_pipe);
         return ((_capture) => {
-          return download("tennis-match.json", _capture);
+          return download("tennis-match", _capture);
         })(_pipe$1);
       })
     ];
@@ -6039,7 +6099,7 @@ function update2(model, message) {
     ];
   } else if (message instanceof UserStartedNewMatch) {
     return [
-      new Model(new Playing(initial4()), List$Empty$const, List$Empty$const, false),
+      new Model(new Playing(initial4()), List$Empty$const, List$Empty$const, ImportStatus$ImportOkay$const),
       from2((_) => {
         return clear();
       })
@@ -6057,7 +6117,7 @@ function update2(model, message) {
 }
 function init(_) {
   return [
-    new Model(new Playing(initial4()), List$Empty$const, List$Empty$const, false),
+    new Model(new Playing(initial4()), List$Empty$const, List$Empty$const, ImportStatus$ImportOkay$const),
     from2((dispatch) => {
       let _pipe = load2();
       let _pipe$1 = new StoredTimelineLoaded(_pipe);
@@ -6069,12 +6129,12 @@ function main2() {
   let app = application(init, update2, view);
   let $ = start4(app, "#tennis-match", undefined);
   if (!($ instanceof Ok)) {
-    throw makeError("let_assert", FILEPATH, "lustre_tennis", 74, "main", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH, "lustre_tennis", 94, "main", "Pattern match failed, no pattern matched the value.", {
       value: $,
-      start: 1380,
-      end: 1438,
-      pattern_start: 1391,
-      pattern_end: 1396
+      start: 1604,
+      end: 1662,
+      pattern_start: 1615,
+      pattern_end: 1620
     });
   }
   return;

@@ -26,8 +26,13 @@ type Model {
     state: MatchState,
     past: List(Player),
     future: List(Player),
-    import_failed: Bool,
+    import_status: ImportStatus,
   )
+}
+
+type ImportStatus {
+  ImportOkay
+  ImportFailed
 }
 
 type Msg {
@@ -48,17 +53,32 @@ type PlayerScore {
     name: String,
     sets: SetColumns,
     points: String,
-    is_serving: Bool,
-    is_winner: Bool,
+    status: PlayerStatus,
   )
+}
+
+type PlayerStatus {
+  Unmarked
+  CurrentServer
+  MatchWinner
 }
 
 type Scoreboard {
   Scoreboard(
     player_one: PlayerScore,
     player_two: PlayerScore,
-    match_is_complete: Bool,
+    status: ScoreboardStatus,
   )
+}
+
+type ScoreboardStatus {
+  MatchInProgress
+  MatchComplete
+}
+
+type ControlAvailability {
+  Available
+  Unavailable
 }
 
 type SetColumns {
@@ -77,7 +97,7 @@ pub fn main() -> Nil {
 
 fn init(_arguments) -> #(Model, Effect(Msg)) {
   #(
-    Model(Playing(match.initial()), [], [], False),
+    Model(Playing(match.initial()), [], [], ImportOkay),
     effect.from(fn(dispatch) {
       local_storage.load()
       |> StoredTimelineLoaded
@@ -92,7 +112,8 @@ fn update(model: Model, message: Msg) -> #(Model, Effect(Msg)) {
   case state, message {
     Playing(_), UserAwardedPoint(player) -> {
       let next_past = list.append(past, [player])
-      let next_model = Model(award_point(state, player), next_past, [], False)
+      let next_model =
+        Model(award_point(state, player), next_past, [], ImportOkay)
       #(next_model, save_timeline(next_past, []))
     }
 
@@ -107,7 +128,7 @@ fn update(model: Model, message: Msg) -> #(Model, Effect(Msg)) {
       effect.from(fn(_) {
         time_travel.Timeline(past, future)
         |> time_travel.serialize
-        |> file_transfer.download("tennis-match.json", _)
+        |> file_transfer.download("tennis-match", _)
       }),
     )
 
@@ -122,7 +143,7 @@ fn update(model: Model, message: Msg) -> #(Model, Effect(Msg)) {
     )
 
     _, UserStartedNewMatch -> #(
-      Model(Playing(match.initial()), [], [], False),
+      Model(Playing(match.initial()), [], [], ImportOkay),
       effect.from(fn(_) { local_storage.clear() }),
     )
 
@@ -138,7 +159,7 @@ fn update(model: Model, message: Msg) -> #(Model, Effect(Msg)) {
 }
 
 fn view(model: Model) -> Element(Msg) {
-  let Model(state, past, future, import_failed) = model
+  let Model(state, past, future, import_status) = model
   let scoreboard = case state {
     Playing(current_match) -> to_playing_scoreboard(current_match)
     Finished(completed_match) -> to_finished_scoreboard(completed_match)
@@ -146,9 +167,9 @@ fn view(model: Model) -> Element(Msg) {
 
   view_scoreboard(
     scoreboard,
-    !list.is_empty(past),
-    !list.is_empty(future),
-    import_failed,
+    control_availability(past),
+    control_availability(future),
+    import_status,
   )
 }
 
@@ -166,7 +187,7 @@ fn award_point(state: MatchState, player: Player) -> MatchState {
 
 fn replay(past: List(Player), future: List(Player)) -> Model {
   let state = list.fold(past, Playing(match.initial()), award_point)
-  Model(state, past, future, False)
+  Model(state, past, future, ImportOkay)
 }
 
 fn undo(model: Model) -> #(Model, Effect(Msg)) {
@@ -223,7 +244,14 @@ fn can_replay(state: MatchState, points: List(Player)) -> Bool {
 
 fn with_import_error(model: Model) -> Model {
   let Model(state, past, future, _) = model
-  Model(state, past, future, True)
+  Model(state, past, future, ImportFailed)
+}
+
+fn control_availability(items: List(item)) -> ControlAvailability {
+  case items {
+    [] -> Unavailable
+    [_, ..] -> Available
+  }
 }
 
 fn save_timeline(past: List(Player), future: List(Player)) -> Effect(Msg) {
@@ -232,11 +260,11 @@ fn save_timeline(past: List(Player), future: List(Player)) -> Effect(Msg) {
 
 fn view_scoreboard(
   scoreboard: Scoreboard,
-  can_undo: Bool,
-  can_redo: Bool,
-  import_failed: Bool,
+  undo: ControlAvailability,
+  redo: ControlAvailability,
+  import_status: ImportStatus,
 ) -> Element(Msg) {
-  let Scoreboard(player_one, player_two, match_is_complete) = scoreboard
+  let Scoreboard(player_one, player_two, status) = scoreboard
 
   html.main([attribute.class("scoreboard")], [
     html.p([attribute.class("eyebrow")], [html.text("CENTRE COURT")]),
@@ -253,29 +281,29 @@ fn view_scoreboard(
       player_row(player_one),
       player_row(player_two),
     ]),
-    case match_is_complete {
-      True ->
+    case status {
+      MatchComplete ->
         html.button(
           [attribute.class("new-match"), event.on_click(UserStartedNewMatch)],
           [html.text("Start a new match")],
         )
-      False -> point_controls(player_one, player_two)
+      MatchInProgress -> point_controls(player_one, player_two)
     },
-    time_travel_controls(can_undo, can_redo),
-    file_controls(import_failed),
+    time_travel_controls(undo, redo),
+    file_controls(import_status),
     repository_link(),
   ])
 }
 
-fn file_controls(import_failed: Bool) -> Element(Msg) {
+fn file_controls(import_status: ImportStatus) -> Element(Msg) {
   html.div([attribute.class("file-section")], [
     html.div([attribute.class("file-controls")], [
       html.button([event.on_click(UserChoseImport)], [html.text("Import")]),
       html.button([event.on_click(UserChoseExport)], [html.text("Export")]),
     ]),
-    case import_failed {
-      False -> element.none()
-      True ->
+    case import_status {
+      ImportOkay -> element.none()
+      ImportFailed ->
         html.p(
           [
             attribute.class("import-error"),
@@ -315,29 +343,38 @@ fn repository_link() -> Element(Msg) {
   )
 }
 
-fn time_travel_controls(can_undo: Bool, can_redo: Bool) -> Element(Msg) {
+fn time_travel_controls(
+  undo: ControlAvailability,
+  redo: ControlAvailability,
+) -> Element(Msg) {
   html.div([attribute.class("time-travel-controls")], [
-    html.button([attribute.disabled(!can_undo), event.on_click(UserChoseUndo)], [
-      html.text("Undo"),
-    ]),
-    html.button([attribute.disabled(!can_redo), event.on_click(UserChoseRedo)], [
-      html.text("Redo"),
-    ]),
+    html.button(
+      [attribute.disabled(undo == Unavailable), event.on_click(UserChoseUndo)],
+      [
+        html.text("Undo"),
+      ],
+    ),
+    html.button(
+      [attribute.disabled(redo == Unavailable), event.on_click(UserChoseRedo)],
+      [
+        html.text("Redo"),
+      ],
+    ),
   ])
 }
 
 fn player_row(score: PlayerScore) -> Element(Msg) {
   let SetColumns(first, second, third) = score.sets
-  let row_class = case score.is_winner {
-    True -> "score-row player-row match-winner"
-    False -> "score-row player-row"
+  let row_class = case score.status {
+    MatchWinner -> "score-row player-row match-winner"
+    Unmarked | CurrentServer -> "score-row player-row"
   }
 
   html.div([attribute.class(row_class)], [
     html.span([attribute.class("serve-marker")], [
-      html.text(case score.is_serving {
-        True -> "●"
-        False -> ""
+      html.text(case score.status {
+        CurrentServer -> "●"
+        Unmarked | MatchWinner -> ""
       }),
     ]),
     html.span([attribute.class("player-name")], [html.text(score.name)]),
@@ -388,18 +425,16 @@ fn to_playing_scoreboard(current_match: match.Match) -> Scoreboard {
       name: player_name(PlayerOne),
       sets: playing_set_columns(completed_sets, current_set, PlayerOne),
       points: player_one_points,
-      is_serving: server == PlayerOne,
-      is_winner: False,
+      status: playing_player_status(PlayerOne, server),
     ),
     player_two: PlayerScore(
       player: PlayerTwo,
       name: player_name(PlayerTwo),
       sets: playing_set_columns(completed_sets, current_set, PlayerTwo),
       points: player_two_points,
-      is_serving: server == PlayerTwo,
-      is_winner: False,
+      status: playing_player_status(PlayerTwo, server),
     ),
-    match_is_complete: False,
+    status: MatchInProgress,
   )
 }
 
@@ -412,19 +447,31 @@ fn to_finished_scoreboard(completed_match: match.CompletedMatch) -> Scoreboard {
       name: player_name(PlayerOne),
       sets: completed_set_columns(completed_sets, PlayerOne),
       points: "–",
-      is_serving: False,
-      is_winner: winner == PlayerOne,
+      status: completed_player_status(PlayerOne, winner),
     ),
     player_two: PlayerScore(
       player: PlayerTwo,
       name: player_name(PlayerTwo),
       sets: completed_set_columns(completed_sets, PlayerTwo),
       points: "–",
-      is_serving: False,
-      is_winner: winner == PlayerTwo,
+      status: completed_player_status(PlayerTwo, winner),
     ),
-    match_is_complete: True,
+    status: MatchComplete,
   )
+}
+
+fn playing_player_status(player: Player, server: Player) -> PlayerStatus {
+  case player == server {
+    True -> CurrentServer
+    False -> Unmarked
+  }
+}
+
+fn completed_player_status(player: Player, winner: Player) -> PlayerStatus {
+  case player == winner {
+    True -> MatchWinner
+    False -> Unmarked
+  }
 }
 
 fn playing_set_columns(
