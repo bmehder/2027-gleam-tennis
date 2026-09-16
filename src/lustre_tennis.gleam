@@ -1,3 +1,4 @@
+import file_transfer
 import gleam/int
 import gleam/list
 import lustre
@@ -7,6 +8,7 @@ import lustre/element.{type Element}
 import lustre/element/html
 import lustre/element/svg
 import lustre/event
+import match_history
 import persistence
 import tennis/game
 import tennis/match
@@ -20,15 +22,24 @@ type MatchState {
 }
 
 type Model {
-  Model(state: MatchState, past: List(Player), future: List(Player))
+  Model(
+    state: MatchState,
+    past: List(Player),
+    future: List(Player),
+    import_failed: Bool,
+  )
 }
 
 type Msg {
   UserAwardedPoint(Player)
   UserChoseUndo
   UserChoseRedo
+  UserChoseExport
+  UserChoseImport
   UserStartedNewMatch
-  StoredHistoryLoaded(persistence.History)
+  ImportedFileRead(String)
+  ImportFileReadFailed
+  StoredHistoryLoaded(match_history.History)
 }
 
 type PlayerScore {
@@ -66,7 +77,7 @@ pub fn main() -> Nil {
 
 fn init(_arguments) -> #(Model, Effect(Msg)) {
   #(
-    Model(Playing(match.initial()), [], []),
+    Model(Playing(match.initial()), [], [], False),
     effect.from(fn(dispatch) {
       persistence.load()
       |> StoredHistoryLoaded
@@ -76,12 +87,12 @@ fn init(_arguments) -> #(Model, Effect(Msg)) {
 }
 
 fn update(model: Model, message: Msg) -> #(Model, Effect(Msg)) {
-  let Model(state, past, _future) = model
+  let Model(state, past, future, _) = model
 
   case state, message {
     Playing(_), UserAwardedPoint(player) -> {
       let next_past = list.append(past, [player])
-      let next_model = Model(award_point(state, player), next_past, [])
+      let next_model = Model(award_point(state, player), next_past, [], False)
       #(next_model, save_history(next_past, []))
     }
 
@@ -91,12 +102,35 @@ fn update(model: Model, message: Msg) -> #(Model, Effect(Msg)) {
 
     _, UserChoseRedo -> redo(model)
 
+    _, UserChoseExport -> #(
+      model,
+      effect.from(fn(_) {
+        match_history.History(past, future)
+        |> match_history.serialize
+        |> file_transfer.download("tennis-match.json", _)
+      }),
+    )
+
+    _, UserChoseImport -> #(
+      model,
+      effect.from(fn(dispatch) {
+        file_transfer.choose_json(
+          fn(contents) { dispatch(ImportedFileRead(contents)) },
+          fn() { dispatch(ImportFileReadFailed) },
+        )
+      }),
+    )
+
     _, UserStartedNewMatch -> #(
-      Model(Playing(match.initial()), [], []),
+      Model(Playing(match.initial()), [], [], False),
       effect.from(fn(_) { persistence.clear() }),
     )
 
-    _, StoredHistoryLoaded(persistence.History(stored_past, stored_future)) -> #(
+    _, ImportedFileRead(contents) -> import_history(model, contents)
+
+    _, ImportFileReadFailed -> #(with_import_error(model), effect.none())
+
+    _, StoredHistoryLoaded(match_history.History(stored_past, stored_future)) -> #(
       replay(stored_past, stored_future),
       effect.none(),
     )
@@ -104,13 +138,18 @@ fn update(model: Model, message: Msg) -> #(Model, Effect(Msg)) {
 }
 
 fn view(model: Model) -> Element(Msg) {
-  let Model(state, past, future) = model
+  let Model(state, past, future, import_failed) = model
   let scoreboard = case state {
     Playing(current_match) -> to_playing_scoreboard(current_match)
     Finished(completed_match) -> to_finished_scoreboard(completed_match)
   }
 
-  view_scoreboard(scoreboard, !list.is_empty(past), !list.is_empty(future))
+  view_scoreboard(
+    scoreboard,
+    !list.is_empty(past),
+    !list.is_empty(future),
+    import_failed,
+  )
 }
 
 fn award_point(state: MatchState, player: Player) -> MatchState {
@@ -127,11 +166,11 @@ fn award_point(state: MatchState, player: Player) -> MatchState {
 
 fn replay(past: List(Player), future: List(Player)) -> Model {
   let state = list.fold(past, Playing(match.initial()), award_point)
-  Model(state, past, future)
+  Model(state, past, future, False)
 }
 
 fn undo(model: Model) -> #(Model, Effect(Msg)) {
-  let Model(_, past, future) = model
+  let Model(_, past, future, _) = model
 
   case list.reverse(past) {
     [] -> #(model, effect.none())
@@ -144,7 +183,7 @@ fn undo(model: Model) -> #(Model, Effect(Msg)) {
 }
 
 fn redo(model: Model) -> #(Model, Effect(Msg)) {
-  let Model(_, past, future) = model
+  let Model(_, past, future, _) = model
 
   case future {
     [] -> #(model, effect.none())
@@ -155,14 +194,47 @@ fn redo(model: Model) -> #(Model, Effect(Msg)) {
   }
 }
 
+fn import_history(model: Model, contents: String) -> #(Model, Effect(Msg)) {
+  case match_history.deserialize(contents) {
+    Error(_) -> #(with_import_error(model), effect.none())
+    Ok(match_history.History(past, future) as history) ->
+      case history_is_valid(past, future) {
+        False -> #(with_import_error(model), effect.none())
+        True -> #(
+          replay(past, future),
+          effect.from(fn(_) { persistence.save(history) }),
+        )
+      }
+  }
+}
+
+fn history_is_valid(past: List(Player), future: List(Player)) -> Bool {
+  can_replay(Playing(match.initial()), list.append(past, future))
+}
+
+fn can_replay(state: MatchState, points: List(Player)) -> Bool {
+  case state, points {
+    _, [] -> True
+    Finished(_), [_, ..] -> False
+    Playing(_), [player, ..remaining] ->
+      can_replay(award_point(state, player), remaining)
+  }
+}
+
+fn with_import_error(model: Model) -> Model {
+  let Model(state, past, future, _) = model
+  Model(state, past, future, True)
+}
+
 fn save_history(past: List(Player), future: List(Player)) -> Effect(Msg) {
-  effect.from(fn(_) { persistence.save(persistence.History(past, future)) })
+  effect.from(fn(_) { persistence.save(match_history.History(past, future)) })
 }
 
 fn view_scoreboard(
   scoreboard: Scoreboard,
   can_undo: Bool,
   can_redo: Bool,
+  import_failed: Bool,
 ) -> Element(Msg) {
   let Scoreboard(player_one, player_two, match_is_complete) = scoreboard
 
@@ -190,7 +262,28 @@ fn view_scoreboard(
       False -> point_controls(player_one, player_two)
     },
     history_controls(can_undo, can_redo),
+    file_controls(import_failed),
     repository_link(),
+  ])
+}
+
+fn file_controls(import_failed: Bool) -> Element(Msg) {
+  html.div([attribute.class("file-section")], [
+    html.div([attribute.class("file-controls")], [
+      html.button([event.on_click(UserChoseImport)], [html.text("Import")]),
+      html.button([event.on_click(UserChoseExport)], [html.text("Export")]),
+    ]),
+    case import_failed {
+      False -> element.none()
+      True ->
+        html.p(
+          [
+            attribute.class("import-error"),
+            attribute.attribute("role", "alert"),
+          ],
+          [html.text("That file does not contain a valid tennis match.")],
+        )
+    },
   ])
 }
 

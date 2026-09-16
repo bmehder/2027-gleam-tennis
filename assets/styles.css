@@ -161,6 +161,31 @@ h1 {
 .history-controls button:hover { background: #edf0eb; }
 .history-controls button:disabled:hover { background: transparent; }
 
+.file-controls {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.file-controls button {
+  padding: 0.45rem 0.8rem;
+  color: #66776e;
+  background: transparent;
+  font-size: 0.8rem;
+}
+
+.file-controls button:hover {
+  color: #17312b;
+  background: #edf0eb;
+}
+
+.import-error {
+  margin: 0.5rem 0 0;
+  color: #8a3324;
+  font-size: 0.8rem;
+}
+
 .repository-link {
   display: inline-flex;
   margin-top: 1.25rem;

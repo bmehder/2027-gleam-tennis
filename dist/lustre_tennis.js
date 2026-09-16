@@ -4777,25 +4777,41 @@ function on(name, handler) {
 function on_click(message) {
   return on("click", success(message));
 }
-// build/dev/javascript/lustre_tennis/persistence_ffi.mjs
-function load(key) {
-  try {
-    return globalThis.localStorage.getItem(key) ?? "";
-  } catch {
-    return "";
-  }
+
+// build/dev/javascript/lustre_tennis/file_transfer_ffi.mjs
+function downloadText(filename, contents) {
+  const blob = new Blob([contents], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
-function save(key, value) {
-  try {
-    globalThis.localStorage.setItem(key, value);
-  } catch {}
-}
-function remove3(key) {
-  try {
-    globalThis.localStorage.removeItem(key);
-  } catch {}
+function chooseJsonFile(onRead, onError) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json,.json";
+  input.addEventListener("change", async () => {
+    const file = input.files?.[0];
+    if (!file)
+      return;
+    try {
+      onRead(await file.text());
+    } catch {
+      onError();
+    }
+  });
+  input.click();
 }
 
+// build/dev/javascript/lustre_tennis/file_transfer.mjs
+function download(filename, contents) {
+  return downloadText(filename, contents);
+}
+function choose_json(on_read, on_error) {
+  return chooseJsonFile(on_read, on_error);
+}
 // build/dev/javascript/lustre_tennis/tennis/player.mjs
 class PlayerOne extends CustomType {
 }
@@ -4811,7 +4827,7 @@ function opponent(player) {
   }
 }
 
-// build/dev/javascript/lustre_tennis/persistence.mjs
+// build/dev/javascript/lustre_tennis/match_history.mjs
 class History extends CustomType {
   constructor(past, future) {
     super();
@@ -4819,7 +4835,26 @@ class History extends CustomType {
     this.future = future;
   }
 }
-var storage_key = "lustre-tennis-point-history";
+class InvalidHistory extends CustomType {
+}
+var HistoryError$InvalidHistory$const = new InvalidHistory;
+var empty3 = /* @__PURE__ */ new History(List$Empty$const, List$Empty$const);
+function encode_player(player) {
+  if (player instanceof PlayerOne) {
+    return string3("player_one");
+  } else {
+    return string3("player_two");
+  }
+}
+function serialize(history) {
+  let past = history.past;
+  let future = history.future;
+  let _pipe = object2(toList([
+    ["past", array2(past, encode_player)],
+    ["future", array2(future, encode_player)]
+  ]));
+  return to_string2(_pipe);
+}
 function player_decoder() {
   let _pipe = string2;
   return then$(_pipe, (value) => {
@@ -4850,36 +4885,47 @@ function history_decoder() {
 function deserialize(stored) {
   let $ = parse(stored, history_decoder());
   if ($ instanceof Ok) {
-    let history = $[0];
-    return history;
+    return $;
   } else {
-    return new History(List$Empty$const, List$Empty$const);
+    return new Error(HistoryError$InvalidHistory$const);
   }
 }
+
+// build/dev/javascript/lustre_tennis/persistence_ffi.mjs
+function load(key) {
+  try {
+    return globalThis.localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+function save(key, value) {
+  try {
+    globalThis.localStorage.setItem(key, value);
+  } catch {}
+}
+function remove3(key) {
+  try {
+    globalThis.localStorage.removeItem(key);
+  } catch {}
+}
+
+// build/dev/javascript/lustre_tennis/persistence.mjs
+var storage_key = "lustre-tennis-point-history";
 function load2() {
   let $ = load(storage_key);
   if ($ === "") {
-    return new History(List$Empty$const, List$Empty$const);
+    return empty3;
   } else {
     let stored = $;
-    return deserialize(stored);
+    let $1 = deserialize(stored);
+    if ($1 instanceof Ok) {
+      let history = $1[0];
+      return history;
+    } else {
+      return empty3;
+    }
   }
-}
-function encode_player(player) {
-  if (player instanceof PlayerOne) {
-    return string3("player_one");
-  } else {
-    return string3("player_two");
-  }
-}
-function serialize(history) {
-  let past = history.past;
-  let future = history.future;
-  let _pipe = object2(toList([
-    ["past", array2(past, encode_player)],
-    ["future", array2(future, encode_player)]
-  ]));
-  return to_string2(_pipe);
 }
 function save2(history) {
   return save(storage_key, serialize(history));
@@ -5453,11 +5499,12 @@ class Finished extends CustomType {
 }
 
 class Model extends CustomType {
-  constructor(state, past, future) {
+  constructor(state, past, future, import_failed) {
     super();
     this.state = state;
     this.past = past;
     this.future = future;
+    this.import_failed = import_failed;
   }
 }
 
@@ -5476,9 +5523,28 @@ class UserChoseRedo extends CustomType {
 }
 var Msg$UserChoseRedo$const = new UserChoseRedo;
 
+class UserChoseExport extends CustomType {
+}
+var Msg$UserChoseExport$const = new UserChoseExport;
+
+class UserChoseImport extends CustomType {
+}
+var Msg$UserChoseImport$const = new UserChoseImport;
+
 class UserStartedNewMatch extends CustomType {
 }
 var Msg$UserStartedNewMatch$const = new UserStartedNewMatch;
+
+class ImportedFileRead extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+
+class ImportFileReadFailed extends CustomType {
+}
+var Msg$ImportFileReadFailed$const = new ImportFileReadFailed;
 
 class StoredHistoryLoaded extends CustomType {
   constructor($0) {
@@ -5540,6 +5606,26 @@ function repository_link() {
         attribute2("d", "M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.093.682-.217.682-.483 0-.237-.009-.866-.014-1.699-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.221-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.295 2.747-1.026 2.747-1.026.546 1.377.203 2.394.1 2.647.64.7 1.028 1.595 1.028 2.688 0 3.848-2.337 4.695-4.566 4.943.359.31.678.921.678 1.856 0 1.34-.012 2.421-.012 2.75 0 .268.18.58.688.481A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2Z")
       ]))
     ]))
+  ]));
+}
+function file_controls(import_failed) {
+  return div(toList([class$("file-section")]), toList([
+    div(toList([class$("file-controls")]), toList([
+      button(toList([on_click(Msg$UserChoseImport$const)]), toList([text3("Import")])),
+      button(toList([on_click(Msg$UserChoseExport$const)]), toList([text3("Export")]))
+    ])),
+    (() => {
+      if (import_failed) {
+        return p(toList([
+          class$("import-error"),
+          attribute2("role", "alert")
+        ]), toList([
+          text3("That file does not contain a valid tennis match.")
+        ]));
+      } else {
+        return none2();
+      }
+    })()
   ]));
 }
 function history_controls(can_undo, can_redo) {
@@ -5606,7 +5692,7 @@ function player_row(score) {
     span(toList([class$("points-score")]), toList([text3(score.points)]))
   ]));
 }
-function view_scoreboard(scoreboard, can_undo, can_redo) {
+function view_scoreboard(scoreboard, can_undo, can_redo, import_failed) {
   let player_one = scoreboard.player_one;
   let player_two = scoreboard.player_two;
   let match_is_complete = scoreboard.match_is_complete;
@@ -5636,6 +5722,7 @@ function view_scoreboard(scoreboard, can_undo, can_redo) {
       }
     })(),
     history_controls(can_undo, can_redo),
+    file_controls(import_failed),
     repository_link()
   ]));
 }
@@ -5758,6 +5845,7 @@ function view(model) {
   let state = model.state;
   let past = model.past;
   let future = model.future;
+  let import_failed = model.import_failed;
   let _block;
   if (state instanceof Playing) {
     let current_match = state[0];
@@ -5767,7 +5855,7 @@ function view(model) {
     _block = to_finished_scoreboard(completed_match);
   }
   let scoreboard = _block;
-  return view_scoreboard(scoreboard, !is_empty2(past), !is_empty2(future));
+  return view_scoreboard(scoreboard, !is_empty2(past), !is_empty2(future), import_failed);
 }
 function award_point(state, player) {
   if (state instanceof Playing) {
@@ -5786,7 +5874,53 @@ function award_point(state, player) {
 }
 function replay(past, future) {
   let state = fold2(past, new Playing(initial4()), award_point);
-  return new Model(state, past, future);
+  return new Model(state, past, future, false);
+}
+function with_import_error(model) {
+  let state = model.state;
+  let past = model.past;
+  let future = model.future;
+  return new Model(state, past, future, true);
+}
+function can_replay(loop$state, loop$points) {
+  while (true) {
+    let state = loop$state;
+    let points = loop$points;
+    if (points instanceof Empty) {
+      return true;
+    } else if (state instanceof Playing) {
+      let player = points.head;
+      let remaining = points.tail;
+      loop$state = award_point(state, player);
+      loop$points = remaining;
+    } else {
+      return false;
+    }
+  }
+}
+function history_is_valid(past, future) {
+  return can_replay(new Playing(initial4()), append(past, future));
+}
+function import_history(model, contents) {
+  let $ = deserialize(contents);
+  if ($ instanceof Ok) {
+    let history = $[0];
+    let past = $[0].past;
+    let future = $[0].future;
+    let $1 = history_is_valid(past, future);
+    if ($1) {
+      return [
+        replay(past, future),
+        from2((_) => {
+          return save2(history);
+        })
+      ];
+    } else {
+      return [with_import_error(model), none()];
+    }
+  } else {
+    return [with_import_error(model), none()];
+  }
 }
 function save_history(past, future) {
   return from2((_) => {
@@ -5825,23 +5959,51 @@ function undo(model) {
 function update2(model, message) {
   let state = model.state;
   let past = model.past;
+  let future = model.future;
   if (state instanceof Playing) {
     if (message instanceof UserAwardedPoint) {
       let player = message[0];
       let next_past = append(past, toList([player]));
-      let next_model = new Model(award_point(state, player), next_past, List$Empty$const);
+      let next_model = new Model(award_point(state, player), next_past, List$Empty$const, false);
       return [next_model, save_history(next_past, List$Empty$const)];
     } else if (message instanceof UserChoseUndo) {
       return undo(model);
     } else if (message instanceof UserChoseRedo) {
       return redo(model);
+    } else if (message instanceof UserChoseExport) {
+      return [
+        model,
+        from2((_) => {
+          let _pipe = new History(past, future);
+          let _pipe$1 = serialize(_pipe);
+          return ((_capture) => {
+            return download("tennis-match.json", _capture);
+          })(_pipe$1);
+        })
+      ];
+    } else if (message instanceof UserChoseImport) {
+      return [
+        model,
+        from2((dispatch) => {
+          return choose_json((contents) => {
+            return dispatch(new ImportedFileRead(contents));
+          }, () => {
+            return dispatch(Msg$ImportFileReadFailed$const);
+          });
+        })
+      ];
     } else if (message instanceof UserStartedNewMatch) {
       return [
-        new Model(new Playing(initial4()), List$Empty$const, List$Empty$const),
+        new Model(new Playing(initial4()), List$Empty$const, List$Empty$const, false),
         from2((_) => {
           return clear();
         })
       ];
+    } else if (message instanceof ImportedFileRead) {
+      let contents = message[0];
+      return import_history(model, contents);
+    } else if (message instanceof ImportFileReadFailed) {
+      return [with_import_error(model), none()];
     } else {
       let stored_past = message[0].past;
       let stored_future = message[0].future;
@@ -5853,13 +6015,40 @@ function update2(model, message) {
     return undo(model);
   } else if (message instanceof UserChoseRedo) {
     return redo(model);
+  } else if (message instanceof UserChoseExport) {
+    return [
+      model,
+      from2((_) => {
+        let _pipe = new History(past, future);
+        let _pipe$1 = serialize(_pipe);
+        return ((_capture) => {
+          return download("tennis-match.json", _capture);
+        })(_pipe$1);
+      })
+    ];
+  } else if (message instanceof UserChoseImport) {
+    return [
+      model,
+      from2((dispatch) => {
+        return choose_json((contents) => {
+          return dispatch(new ImportedFileRead(contents));
+        }, () => {
+          return dispatch(Msg$ImportFileReadFailed$const);
+        });
+      })
+    ];
   } else if (message instanceof UserStartedNewMatch) {
     return [
-      new Model(new Playing(initial4()), List$Empty$const, List$Empty$const),
+      new Model(new Playing(initial4()), List$Empty$const, List$Empty$const, false),
       from2((_) => {
         return clear();
       })
     ];
+  } else if (message instanceof ImportedFileRead) {
+    let contents = message[0];
+    return import_history(model, contents);
+  } else if (message instanceof ImportFileReadFailed) {
+    return [with_import_error(model), none()];
   } else {
     let stored_past = message[0].past;
     let stored_future = message[0].future;
@@ -5868,7 +6057,7 @@ function update2(model, message) {
 }
 function init(_) {
   return [
-    new Model(new Playing(initial4()), List$Empty$const, List$Empty$const),
+    new Model(new Playing(initial4()), List$Empty$const, List$Empty$const, false),
     from2((dispatch) => {
       let _pipe = load2();
       let _pipe$1 = new StoredHistoryLoaded(_pipe);
@@ -5880,12 +6069,12 @@ function main2() {
   let app = application(init, update2, view);
   let $ = start4(app, "#tennis-match", undefined);
   if (!($ instanceof Ok)) {
-    throw makeError("let_assert", FILEPATH, "lustre_tennis", 63, "main", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH, "lustre_tennis", 74, "main", "Pattern match failed, no pattern matched the value.", {
       value: $,
-      start: 1192,
-      end: 1250,
-      pattern_start: 1203,
-      pattern_end: 1208
+      start: 1364,
+      end: 1422,
+      pattern_start: 1375,
+      pattern_end: 1380
     });
   }
   return;

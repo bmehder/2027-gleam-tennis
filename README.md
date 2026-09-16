@@ -17,6 +17,7 @@ correctness or maintainability.
 - Assumes Player One serves first in the match
 - Persists the match in browser local storage
 - Supports persistent undo and redo
+- Imports and exports match history as JSON files
 - Displays the completed match and starts a new one
 
 ## The modeling approach
@@ -73,8 +74,10 @@ This event-history representation also made undo and redo straightforward:
 - Redo moves the next point from `future` back to `past`.
 - Awarding a new point after an undo clears `future` and creates a new timeline.
 
-Browser access is isolated in a small JavaScript FFI file. JSON encoding,
-decoding, validation, and storage policy remain in Gleam.
+Browser storage and file access are isolated in small JavaScript FFI files.
+JSON encoding, decoding, validation, and storage policy remain in Gleam. The
+history format is independent of local storage, so the same representation is
+used for persistence, import, export, and tests.
 
 ## What we learned from the three versions
 
@@ -115,8 +118,11 @@ persistence, and translating domain state for display.
 ```text
 src/
 ├── lustre_tennis.gleam    # Lustre model, update, view, and presentation data
-├── persistence.gleam      # Stored history encoding and validation
+├── match_history.gleam     # Reusable history type and JSON format
+├── persistence.gleam       # Local-storage policy
 ├── persistence_ffi.mjs    # Browser local-storage boundary
+├── file_transfer.gleam     # Import and export interface
+├── file_transfer_ffi.mjs  # Browser file boundary
 └── tennis/
     ├── player.gleam
     ├── game.gleam
@@ -125,7 +131,7 @@ src/
     └── match.gleam
 
 test/
-├── persistence_test.gleam
+├── match_history_test.gleam
 └── tennis/
     ├── game_test.gleam
     ├── tiebreak_test.gleam
@@ -156,7 +162,3 @@ gleam run -m lustre/dev build
 The generated `dist` directory can be served by any static host. This project
 uses Vercel with the framework preset set to **Other** and the output directory
 set to `dist`.
-
-## Source
-
-[View the repository on GitHub](https://github.com/bmehder/2027-gleam-tennis).
