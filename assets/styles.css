@@ -161,6 +161,24 @@ h1 {
 .history-controls button:hover { background: #edf0eb; }
 .history-controls button:disabled:hover { background: transparent; }
 
+.repository-link {
+  display: inline-flex;
+  margin-top: 1.25rem;
+  color: #66776e;
+  transition: color 150ms ease, transform 150ms ease;
+}
+
+.repository-link:hover {
+  color: #17312b;
+  transform: translateY(-1px);
+}
+
+.repository-link svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  fill: currentColor;
+}
+
 .reset { color: #17312b; background: transparent; }
 .reset:hover { background: #edf0eb; }
 

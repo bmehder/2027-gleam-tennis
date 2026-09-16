@@ -1815,8 +1815,23 @@ function boolean_attribute(name, value) {
 function class$(name) {
   return attribute2("class", name);
 }
+function href(url) {
+  return attribute2("href", url);
+}
+function target(value) {
+  return attribute2("target", value);
+}
+function rel(value) {
+  return attribute2("rel", value);
+}
 function disabled(is_disabled) {
   return boolean_attribute("disabled", is_disabled);
+}
+function aria(name, value) {
+  return attribute2("aria-" + name, value);
+}
+function aria_label(value) {
+  return aria("label", value);
 }
 
 // build/dev/javascript/lustre/lustre/effect.mjs
@@ -2069,6 +2084,9 @@ var DocumentType$Other$const = new Other;
 function element2(tag, attributes, children) {
   return element("", "", tag, attributes, children, empty2(), false, is_void_html_element(tag, ""));
 }
+function namespaced(namespace, tag, attributes, children) {
+  return element("", namespace, tag, attributes, children, empty2(), false, is_void_html_element(tag, namespace));
+}
 function text2(content) {
   return text("", content);
 }
@@ -2103,6 +2121,9 @@ function div(attrs, children) {
 }
 function p(attrs, children) {
   return element2("p", attrs, children);
+}
+function a(attrs, children) {
+  return element2("a", attrs, children);
 }
 function span(attrs, children) {
   return element2("span", attrs, children);
@@ -4738,6 +4759,15 @@ function start4(app, selector, arguments$) {
   });
 }
 
+// build/dev/javascript/lustre/lustre/element/svg.mjs
+var namespace = "http://www.w3.org/2000/svg";
+function svg(attrs, children) {
+  return namespaced(namespace, "svg", attrs, children);
+}
+function path(attrs) {
+  return namespaced(namespace, "path", attrs, empty_list);
+}
+
 // build/dev/javascript/lustre/lustre/event.mjs
 function on(name, handler) {
   return event(name, map3(handler, (message) => {
@@ -5494,6 +5524,24 @@ class SetCell extends CustomType {
     this.tiebreak_points = tiebreak_points;
   }
 }
+function repository_link() {
+  return a(toList([
+    class$("repository-link"),
+    href("https://github.com/bmehder/2027-gleam-tennis"),
+    target("_blank"),
+    rel("noopener noreferrer"),
+    aria_label("View the source code on GitHub")
+  ]), toList([
+    svg(toList([
+      attribute2("viewBox", "0 0 24 24"),
+      attribute2("aria-hidden", "true")
+    ]), toList([
+      path(toList([
+        attribute2("d", "M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.093.682-.217.682-.483 0-.237-.009-.866-.014-1.699-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.221-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.295 2.747-1.026 2.747-1.026.546 1.377.203 2.394.1 2.647.64.7 1.028 1.595 1.028 2.688 0 3.848-2.337 4.695-4.566 4.943.359.31.678.921.678 1.856 0 1.34-.012 2.421-.012 2.75 0 .268.18.58.688.481A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2Z")
+      ]))
+    ]))
+  ]));
+}
 function history_controls(can_undo, can_redo) {
   return div(toList([class$("history-controls")]), toList([
     button(toList([
@@ -5587,7 +5635,8 @@ function view_scoreboard(scoreboard, can_undo, can_redo) {
         return point_controls(player_one, player_two);
       }
     })(),
-    history_controls(can_undo, can_redo)
+    history_controls(can_undo, can_redo),
+    repository_link()
   ]));
 }
 function to_set_columns(cells) {
@@ -5831,12 +5880,12 @@ function main2() {
   let app = application(init, update2, view);
   let $ = start4(app, "#tennis-match", undefined);
   if (!($ instanceof Ok)) {
-    throw makeError("let_assert", FILEPATH, "lustre_tennis", 62, "main", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH, "lustre_tennis", 63, "main", "Pattern match failed, no pattern matched the value.", {
       value: $,
-      start: 1166,
-      end: 1224,
-      pattern_start: 1177,
-      pattern_end: 1182
+      start: 1192,
+      end: 1250,
+      pattern_start: 1203,
+      pattern_end: 1208
     });
   }
   return;
