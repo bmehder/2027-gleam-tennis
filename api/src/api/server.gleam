@@ -1,9 +1,11 @@
+import api/match_id
 import api/match_json
+import api/match_registry
 import api/match_store
 import gleam/bytes_tree
 import gleam/dynamic/decode
 import gleam/erlang/process
-import gleam/http.{Get, Post}
+import gleam/http.{Get, Options, Post}
 import gleam/http/request.{type Request}
 import gleam/http/response.{type Response}
 import gleam/json
@@ -14,9 +16,9 @@ import tennis/player.{type Player, PlayerOne, PlayerTwo}
 const port = 4000
 
 pub fn main() -> Nil {
-  let assert Ok(store) = match_store.start()
+  let assert Ok(registry) = match_registry.start()
   let assert Ok(_) =
-    fn(request) { handle_request(request, store) }
+    fn(request) { handle_request(request, registry) }
     |> mist.new
     |> mist.bind("localhost")
     |> mist.port(port)
@@ -27,30 +29,64 @@ pub fn main() -> Nil {
 
 fn handle_request(
   request: Request(Connection),
-  store: match_store.Store,
+  registry: match_registry.Registry,
 ) -> Response(ResponseData) {
-  case request.method, request.path {
-    Get, "/match" ->
-      json_response(200, snapshot_json(match_store.current(store)))
-    Post, "/point" -> award_point(request, store)
-    _, _ ->
-      json_response(404, json.object([#("error", json.string("Not found"))]))
+  case request.method, request.path_segments(request) {
+    Options, _ -> preflight_response()
+    Post, ["matches"] -> create_match(registry)
+    Get, ["matches", id] -> get_match(registry, match_id.from_string(id))
+    Post, ["matches", id, "points"] ->
+      award_point(request, registry, match_id.from_string(id))
+    _, _ -> not_found()
+  }
+}
+
+fn create_match(registry: match_registry.Registry) -> Response(ResponseData) {
+  case match_registry.create(registry) {
+    Error(_) ->
+      json_response(
+        500,
+        json.object([#("error", json.string("Could not create match"))]),
+      )
+
+    Ok(match_registry.CreatedMatch(id, store)) ->
+      json_response(
+        201,
+        json.object([
+          #("id", json.string(match_id.to_string(id))),
+          #("match", snapshot_json(match_store.current(store))),
+        ]),
+      )
+  }
+}
+
+fn get_match(
+  registry: match_registry.Registry,
+  id: match_id.MatchId,
+) -> Response(ResponseData) {
+  case match_registry.find(registry, id) {
+    Error(Nil) -> not_found()
+    Ok(store) -> json_response(200, snapshot_json(match_store.current(store)))
   }
 }
 
 fn award_point(
   request: Request(Connection),
+  registry: match_registry.Registry,
+  id: match_id.MatchId,
+) -> Response(ResponseData) {
+  case match_registry.find(registry, id) {
+    Error(Nil) -> not_found()
+    Ok(store) -> award_point_to_match(request, store)
+  }
+}
+
+fn award_point_to_match(
+  request: Request(Connection),
   store: match_store.Store,
 ) -> Response(ResponseData) {
   case point_winner(request) {
-    Error(_) ->
-      json_response(
-        400,
-        json.object([
-          #("error", json.string("Expected player_one or player_two")),
-        ]),
-      )
-
+    Error(_) -> invalid_player()
     Ok(player) ->
       case match_store.point_won(store, player) {
         Ok(snapshot) -> json_response(200, snapshot_json(snapshot))
@@ -63,6 +99,19 @@ fn award_point(
           )
       }
   }
+}
+
+fn invalid_player() -> Response(ResponseData) {
+  json_response(
+    400,
+    json.object([
+      #("error", json.string("Expected player_one or player_two")),
+    ]),
+  )
+}
+
+fn not_found() -> Response(ResponseData) {
+  json_response(404, json.object([#("error", json.string("Not found"))]))
 }
 
 fn point_winner(request: Request(Connection)) -> Result(Player, Nil) {
@@ -98,4 +147,18 @@ fn json_response(status: Int, body: json.Json) -> Response(ResponseData) {
   response.new(status)
   |> response.set_header("content-type", "application/json")
   |> response.set_body(mist.Bytes(bytes_tree.from_string(json.to_string(body))))
+  |> with_cors
+}
+
+fn preflight_response() -> Response(ResponseData) {
+  response.new(204)
+  |> response.set_body(mist.Bytes(bytes_tree.new()))
+  |> with_cors
+}
+
+fn with_cors(response: Response(body)) -> Response(body) {
+  response
+  |> response.set_header("access-control-allow-origin", "*")
+  |> response.set_header("access-control-allow-methods", "GET, POST, OPTIONS")
+  |> response.set_header("access-control-allow-headers", "content-type")
 }

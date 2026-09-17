@@ -20,7 +20,7 @@ correctness or maintainability.
 - Supports persistent undo and redo
 - Imports and exports the time-travel timeline as JSON files
 - Displays the completed match and starts a new one
-- Includes a single-match REST API proof of concept running on the BEAM
+- Includes a multi-match REST API proof of concept running on the BEAM
 - Accepts point events and returns the newly derived match as JSON
 
 ## The modeling approach
@@ -158,19 +158,20 @@ The repository now contains two applications built around one scoring library:
 - The REST API compiles to Erlang and runs on the BEAM with Mist.
 - The target-neutral `tennis_scoring` package supplies the domain model to both.
 
-The API is deliberately a small proof of concept for one in-memory match. A
-typed actor owns an ordered list of point winners. It handles requests one at a
-time, creates a new immutable event list for each accepted point, and replays
-that list through `match.initial()` to derive the response. It never serializes
-or mutates the opaque match value.
+The API is deliberately an in-memory proof of concept. A registry actor creates
+an independent actor and ID for each match. Every match actor owns an ordered
+list of point winners, handles requests one at a time, creates a new immutable
+event list for each accepted point, and replays that list through
+`match.initial()` to derive the response. It never serializes or mutates the
+opaque match value.
 
 ```text
-POST point event → event-log actor → replay scoring rules → JSON response
+match ID → registry → event-log actor → replay scoring rules → JSON response
 ```
 
 This separation lets another UI use the same scoring behavior without depending
-on Lustre. Database persistence, multiple match IDs, authentication, and event
-versioning are intentionally outside the proof of concept.
+on Lustre. Database persistence, authentication, and event versioning are
+intentionally outside the proof of concept.
 
 ## Project structure
 
@@ -225,18 +226,30 @@ gleam test
 gleam run -m api/server
 ```
 
-With the API running, read the match or award a point:
+With the API running, create a match, read it, or award a point:
 
 ```sh
-curl http://localhost:4000/match
+curl -X POST http://localhost:4000/matches
+
+curl http://localhost:4000/matches/match-1
 
 curl -X POST \
   -H "content-type: application/json" \
   -d '{"winner":"player_two"}' \
-  http://localhost:4000/point
+  http://localhost:4000/matches/match-1/points
 ```
 
 Restarting the API resets its in-memory event log.
+
+The proof-of-concept API permits cross-origin `GET` and `POST` requests and
+responds to browser `OPTIONS` preflight requests. A UI served from another local
+development server—or opened directly as an HTML file—can therefore call it at
+`http://localhost:4000` without additional proxy configuration.
+
+A dependency-free client is available at `api/example/index.html`. Open it
+directly in a browser after starting the API. Match creation is explicit, and a
+second browser window can load the displayed match ID to interact with the same
+match actor.
 
 Create the static site in `dist`:
 

@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tennis API Client</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        display: grid;
+        min-height: 100vh;
+        margin: 0;
+        padding: 1rem;
+        place-items: center;
+        background: #f5f5f5;
+        color: #111;
+        font-family: system-ui, sans-serif;
+      }
+
+      main {
+        width: min(38rem, 100%);
+        border: 1px solid #111;
+        background: #fff;
+      }
+
+      header,
+      .match-controls,
+      .point-controls {
+        padding: 0.75rem;
+      }
+
+      header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        border-bottom: 1px solid #111;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 1.15rem;
+      }
+
+      #status {
+        color: #666;
+        font-size: 0.8rem;
+      }
+
+      .match-controls {
+        display: grid;
+        grid-template-columns: auto 1fr auto auto;
+        gap: 0.5rem;
+        border-bottom: 1px solid #111;
+      }
+
+      input,
+      button {
+        min-width: 0;
+        padding: 0.55rem 0.7rem;
+        border: 1px solid #111;
+        border-radius: 0;
+        background: #fff;
+        color: #111;
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      button:hover:not(:disabled) {
+        background: #111;
+        color: #fff;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.35;
+      }
+
+      .scoreboard {
+        display: grid;
+        grid-template-columns: minmax(8rem, 1fr) repeat(3, 3rem) 4rem;
+      }
+
+      .scoreboard > * {
+        display: flex;
+        min-height: 3rem;
+        align-items: center;
+        justify-content: center;
+        padding: 0.45rem;
+        border-bottom: 1px solid #ddd;
+      }
+
+      .scoreboard > :nth-last-child(-n + 5) {
+        border-bottom: 0;
+      }
+
+      .scoreboard strong {
+        min-height: 2rem;
+        border-bottom-color: #111;
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .scoreboard .player {
+        justify-content: flex-start;
+        font-weight: 650;
+      }
+
+      .server {
+        width: 0.5rem;
+        height: 0.5rem;
+        margin-right: 0.6rem;
+        border-radius: 50%;
+      }
+
+      .server.active {
+        background: #111;
+      }
+
+      .points {
+        font-size: 1.2rem;
+        font-weight: 700;
+      }
+
+      .point-controls {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+        border-top: 1px solid #111;
+      }
+
+      .point-controls button {
+        background: #111;
+        color: #fff;
+      }
+
+      .point-controls button:hover:not(:disabled) {
+        background: #fff;
+        color: #111;
+      }
+
+      @media (max-width: 34rem) {
+        .match-controls {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .match-controls input {
+          grid-column: 1 / -1;
+          grid-row: 1;
+        }
+
+        .scoreboard {
+          grid-template-columns: minmax(7rem, 1fr) repeat(3, 2.5rem) 3.25rem;
+        }
+
+        .point-controls {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <main>
+      <header>
+        <h1>Tennis Match</h1>
+        <span id="status">No match selected</span>
+      </header>
+
+      <div class="match-controls">
+        <button id="new-match">New match</button>
+        <input id="match-id" aria-label="Match ID" placeholder="match-1" />
+        <button id="load-match">Load</button>
+        <button id="refresh-match" disabled>Refresh</button>
+      </div>
+
+      <div class="scoreboard">
+        <strong>Player</strong>
+        <strong>1</strong>
+        <strong>2</strong>
+        <strong>3</strong>
+        <strong>Pts</strong>
+
+        <div class="player">
+          <span id="player-one-server" class="server"></span>
+          Player One
+        </div>
+        <div id="player-one-set-1">–</div>
+        <div id="player-one-set-2">–</div>
+        <div id="player-one-set-3">–</div>
+        <div id="player-one-points" class="points">–</div>
+
+        <div class="player">
+          <span id="player-two-server" class="server"></span>
+          Player Two
+        </div>
+        <div id="player-two-set-1">–</div>
+        <div id="player-two-set-2">–</div>
+        <div id="player-two-set-3">–</div>
+        <div id="player-two-points" class="points">–</div>
+      </div>
+
+      <div class="point-controls">
+        <button id="player-one-point" disabled>Point to Player One</button>
+        <button id="player-two-point" disabled>Point to Player Two</button>
+      </div>
+    </main>
+
+    <script>
+      const api = "http://localhost:4000"
+      const $ = selector => document.querySelector(selector)
+
+      let matchId = ""
+      let match = null
+
+      const request = (path, options) =>
+        fetch(`${api}${path}`, options).then(response =>
+          response.json().then(body =>
+            response.ok ? body : Promise.reject(Error(body.error)),
+          ),
+        )
+
+      const setScore = player => index =>
+        [
+          ...match.sets.map(set => set.games[player]),
+          ...(match.games ? [match.games[player]] : []),
+          "–",
+          "–",
+          "–",
+        ][index]
+
+      const showError = error => {
+        $("#status").textContent = error.message
+      }
+
+      const render = () => {
+        const hasMatch = match !== null
+        const isPlaying = hasMatch && match.status === "in_progress"
+
+        $("#status").textContent = hasMatch ? matchId : "No match selected"
+        $("#refresh-match").disabled = !hasMatch
+        $("#player-one-point").disabled = !isPlaying
+        $("#player-two-point").disabled = !isPlaying
+
+        if (!hasMatch) return
+
+        const playerOneSet = setScore("player_one")
+        const playerTwoSet = setScore("player_two")
+
+        ;[0, 1, 2].forEach(index => {
+          $(`#player-one-set-${index + 1}`).textContent = playerOneSet(index)
+          $(`#player-two-set-${index + 1}`).textContent = playerTwoSet(index)
+        })
+
+        $("#player-one-points").textContent =
+          match.points ? match.points.player_one : "–"
+        $("#player-two-points").textContent =
+          match.points ? match.points.player_two : "–"
+        $("#player-one-server").classList.toggle(
+          "active",
+          match.server === "player_one",
+        )
+        $("#player-two-server").classList.toggle(
+          "active",
+          match.server === "player_two",
+        )
+      }
+
+      const selectMatch = (id, nextMatch) => {
+        matchId = id
+        match = nextMatch
+        $("#match-id").value = id
+        render()
+      }
+
+      const createMatch = () =>
+        request("/matches", { method: "POST" })
+          .then(created => selectMatch(created.id, created.match))
+          .catch(showError)
+
+      const loadMatch = () => {
+        const id = $("#match-id").value.trim()
+        if (!id) return
+
+        request(`/matches/${encodeURIComponent(id)}`)
+          .then(nextMatch => selectMatch(id, nextMatch))
+          .catch(showError)
+      }
+
+      const refreshMatch = () =>
+        request(`/matches/${encodeURIComponent(matchId)}`)
+          .then(nextMatch => selectMatch(matchId, nextMatch))
+          .catch(showError)
+
+      const awardPoint = winner =>
+        request(`/matches/${encodeURIComponent(matchId)}/points`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ winner }),
+        })
+          .then(nextMatch => selectMatch(matchId, nextMatch))
+          .catch(showError)
+
+      $("#new-match").addEventListener("click", createMatch)
+      $("#load-match").addEventListener("click", loadMatch)
+      $("#refresh-match").addEventListener("click", refreshMatch)
+      $("#player-one-point").addEventListener("click", () =>
+        awardPoint("player_one"),
+      )
+      $("#player-two-point").addEventListener("click", () =>
+        awardPoint("player_two"),
+      )
+    </script>
+  </body>
+</html>
