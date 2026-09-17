@@ -22,6 +22,7 @@ correctness or maintainability.
 - Displays the completed match and starts a new one
 - Includes a multi-match REST API proof of concept running on the BEAM
 - Accepts point events and returns the newly derived match as JSON
+- Supports undo and redo through the API and its browser demo
 
 ## The modeling approach
 

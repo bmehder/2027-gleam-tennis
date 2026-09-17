@@ -28,6 +28,7 @@
 
       header,
       .match-controls,
+      .time-controls,
       .point-controls {
         padding: 0.75rem;
       }
@@ -135,6 +136,13 @@
         border-top: 1px solid #111;
       }
 
+      .time-controls {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+        border-top: 1px solid #111;
+      }
+
       .point-controls button {
         background: #111;
         color: #fff;
@@ -210,6 +218,11 @@
         <button id="player-one-point" disabled>Point to Player One</button>
         <button id="player-two-point" disabled>Point to Player Two</button>
       </div>
+
+      <div class="time-controls">
+        <button id="undo" disabled>Undo</button>
+        <button id="redo" disabled>Redo</button>
+      </div>
     </main>
 
     <script>
@@ -245,6 +258,8 @@
 
         $("#status").textContent = hasMatch ? matchId : "No match selected"
         $("#refresh-match").disabled = !hasMatch
+        $("#undo").disabled = !hasMatch
+        $("#redo").disabled = !hasMatch
         $("#player-one-point").disabled = !isPlaying
         $("#player-two-point").disabled = !isPlaying
 
@@ -307,9 +322,18 @@
           .then(nextMatch => selectMatch(matchId, nextMatch))
           .catch(showError)
 
+      const moveThroughTime = direction =>
+        request(`/matches/${encodeURIComponent(matchId)}/${direction}`, {
+          method: "POST",
+        })
+          .then(nextMatch => selectMatch(matchId, nextMatch))
+          .catch(showError)
+
       $("#new-match").addEventListener("click", createMatch)
       $("#load-match").addEventListener("click", loadMatch)
       $("#refresh-match").addEventListener("click", refreshMatch)
+      $("#undo").addEventListener("click", () => moveThroughTime("undo"))
+      $("#redo").addEventListener("click", () => moveThroughTime("redo"))
       $("#player-one-point").addEventListener("click", () =>
         awardPoint("player_one"),
       )

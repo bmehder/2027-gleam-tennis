@@ -49,7 +49,33 @@ fn handle_request(
     Get, ["matches", id] -> get_match(registry, match_id.from_string(id))
     Post, ["matches", id, "points"] ->
       award_point(request, registry, match_id.from_string(id))
+    Post, ["matches", id, "undo"] ->
+      time_travel(registry, match_id.from_string(id), match_store.undo, "undo")
+    Post, ["matches", id, "redo"] ->
+      time_travel(registry, match_id.from_string(id), match_store.redo, "redo")
     _, _ -> not_found()
+  }
+}
+
+fn time_travel(
+  registry: match_registry.Registry,
+  id: match_id.MatchId,
+  move: fn(match_store.Store) -> Result(match_store.Snapshot, Nil),
+  direction: String,
+) -> Response(ResponseData) {
+  case match_registry.find(registry, id) {
+    Error(Nil) -> not_found()
+    Ok(store) ->
+      case move(store) {
+        Ok(snapshot) -> json_response(200, snapshot_json(snapshot))
+        Error(Nil) ->
+          json_response(
+            409,
+            json.object([
+              #("error", json.string("Nothing to " <> direction)),
+            ]),
+          )
+      }
   }
 }
 
