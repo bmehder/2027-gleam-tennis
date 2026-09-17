@@ -5,12 +5,14 @@ import api/match_store
 import envoy
 import gleam/bytes_tree
 import gleam/dynamic/decode
+import gleam/erlang/application
 import gleam/erlang/process
 import gleam/http.{Get, Options, Post}
 import gleam/http/request.{type Request}
 import gleam/http/response.{type Response}
 import gleam/int
 import gleam/json
+import gleam/option.{None}
 import gleam/result
 import mist.{type Connection, type ResponseData}
 import tennis/player.{type Player, PlayerOne, PlayerTwo}
@@ -42,11 +44,29 @@ fn handle_request(
     Options, _ -> preflight_response()
     Get, ["health"] ->
       json_response(200, json.object([#("status", json.string("ok"))]))
+    Get, ["demo"] -> demo_response()
     Post, ["matches"] -> create_match(registry)
     Get, ["matches", id] -> get_match(registry, match_id.from_string(id))
     Post, ["matches", id, "points"] ->
       award_point(request, registry, match_id.from_string(id))
     _, _ -> not_found()
+  }
+}
+
+fn demo_response() -> Response(ResponseData) {
+  case application.priv_directory("tennis_api") {
+    Error(Nil) -> not_found()
+    Ok(priv_directory) ->
+      case
+        mist.send_file(priv_directory <> "/demo.html", offset: 0, limit: None)
+      {
+        Error(_) -> not_found()
+        Ok(body) ->
+          response.new(200)
+          |> response.set_header("content-type", "text/html; charset=utf-8")
+          |> response.set_body(body)
+          |> with_cors
+      }
   }
 }
 

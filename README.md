@@ -249,10 +249,9 @@ responds to browser `OPTIONS` preflight requests. A UI served from another local
 development server—or opened directly as an HTML file—can therefore call it at
 `http://localhost:4000` without additional proxy configuration.
 
-A dependency-free client is available at `api/example/index.html`. Open it
-directly in a browser after starting the API. Match creation is explicit, and a
-second browser window can load the displayed match ID to interact with the same
-match actor.
+A dependency-free client is available at `api/priv/demo.html` and served by the
+API at `/demo`. Match creation is explicit, and a second browser window can load
+the displayed match ID to interact with the same match actor.
 
 ## Deploying the API to Render
 
