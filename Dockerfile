@@ -13,5 +13,5 @@ USER tennis
 WORKDIR /app
 EXPOSE 10000
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
 CMD ["run"]
