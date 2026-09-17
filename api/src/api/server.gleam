@@ -2,29 +2,36 @@ import api/match_id
 import api/match_json
 import api/match_registry
 import api/match_store
+import envoy
 import gleam/bytes_tree
 import gleam/dynamic/decode
 import gleam/erlang/process
 import gleam/http.{Get, Options, Post}
 import gleam/http/request.{type Request}
 import gleam/http/response.{type Response}
+import gleam/int
 import gleam/json
 import gleam/result
 import mist.{type Connection, type ResponseData}
 import tennis/player.{type Player, PlayerOne, PlayerTwo}
-
-const port = 4000
 
 pub fn main() -> Nil {
   let assert Ok(registry) = match_registry.start()
   let assert Ok(_) =
     fn(request) { handle_request(request, registry) }
     |> mist.new
-    |> mist.bind("localhost")
-    |> mist.port(port)
+    |> mist.bind("0.0.0.0")
+    |> mist.port(port())
     |> mist.start
 
   process.sleep_forever()
+}
+
+fn port() -> Int {
+  case envoy.get("PORT") {
+    Ok(value) -> int.parse(value) |> result.unwrap(4000)
+    Error(Nil) -> 4000
+  }
 }
 
 fn handle_request(
@@ -33,6 +40,8 @@ fn handle_request(
 ) -> Response(ResponseData) {
   case request.method, request.path_segments(request) {
     Options, _ -> preflight_response()
+    Get, ["health"] ->
+      json_response(200, json.object([#("status", json.string("ok"))]))
     Post, ["matches"] -> create_match(registry)
     Get, ["matches", id] -> get_match(registry, match_id.from_string(id))
     Post, ["matches", id, "points"] ->

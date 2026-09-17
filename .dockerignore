@@ -1,0 +1,8 @@
+.git
+.lustre
+build
+api/build
+packages/tennis_scoring/build
+dist
+*.beam
+erl_crash.dump

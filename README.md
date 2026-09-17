@@ -223,8 +223,11 @@ Run the API tests or start the local API from `api`:
 
 ```sh
 gleam test
-gleam run -m api/server
+gleam run
 ```
+
+The API uses port `4000` locally. When `PORT` is present, it uses that value
+instead so it can run as a Render web service.
 
 With the API running, create a match, read it, or award a point:
 
@@ -250,6 +253,17 @@ A dependency-free client is available at `api/example/index.html`. Open it
 directly in a browser after starting the API. Match creation is explicit, and a
 second browser window can load the displayed match ID to interact with the same
 match actor.
+
+## Deploying the API to Render
+
+The repository includes a Dockerfile and Render Blueprint for the Erlang API.
+In Render, create a new Blueprint, select this repository, and deploy the
+`gleam-tennis-api` service on the Free plan. Render builds the container,
+checks `/health`, and assigns the API an `onrender.com` URL.
+
+The free service sleeps after a period without traffic. Matches are currently
+held in memory, so they are reset whenever Render sleeps, restarts, or redeploys
+the service. This is intentional for the proof of concept.
 
 Create the static site in `dist`:
 
