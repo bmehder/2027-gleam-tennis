@@ -160,14 +160,14 @@ The repository now contains two applications built around one scoring library:
 - The target-neutral `tennis_scoring` package supplies the domain model to both.
 
 The API is deliberately an in-memory proof of concept. A registry actor creates
-an independent actor and ID for each match. Every match actor owns an ordered
-list of point winners, handles requests one at a time, creates a new immutable
-event list for each accepted point, and replays that list through
-`match.initial()` to derive the response. It never serializes or mutates the
-opaque match value.
+an independent actor and ID for each match. Every match actor owns a timeline
+with `past` and `future` point-winner events and handles requests one at a time.
+Awarding a point appends it to `past` and clears `future`; undo and redo move an
+event between the two sides. The actor replays `past` through `match.initial()`
+to derive each response. It never serializes or mutates the opaque match value.
 
 ```text
-match ID → registry → event-log actor → replay scoring rules → JSON response
+match ID → registry → timeline actor → replay scoring rules → JSON response
 ```
 
 This separation lets another UI use the same scoring behavior without depending
@@ -187,10 +187,16 @@ intentionally outside the proof of concept.
 │       ├── src/tennis/
 │       └── test/tennis/
 └── api/                    # Erlang-targeted Mist application
-    ├── src/api/
-    │   ├── match_store.gleam
-    │   ├── match_json.gleam
-    │   └── server.gleam
+    ├── priv/
+    │   └── demo.html
+    ├── src/
+    │   ├── tennis_api.gleam
+    │   └── api/
+    │       ├── match_id.gleam
+    │       ├── match_registry.gleam
+    │       ├── match_store.gleam
+    │       ├── match_json.gleam
+    │       └── server.gleam
     └── test/api/
 ```
 
@@ -230,7 +236,8 @@ gleam run
 The API uses port `4000` locally. When `PORT` is present, it uses that value
 instead so it can run as a Render web service.
 
-With the API running, create a match, read it, or award a point:
+With the API running, create a match, read it, award a point, or move through
+its timeline:
 
 ```sh
 curl -X POST http://localhost:4000/matches
@@ -241,18 +248,41 @@ curl -X POST \
   -H "content-type: application/json" \
   -d '{"winner":"player_two"}' \
   http://localhost:4000/matches/match-1/points
+
+curl -X POST http://localhost:4000/matches/match-1/undo
+
+curl -X POST http://localhost:4000/matches/match-1/redo
 ```
 
-Restarting the API resets its in-memory event log.
+Restarting the API resets its in-memory timelines.
 
 The proof-of-concept API permits cross-origin `GET` and `POST` requests and
 responds to browser `OPTIONS` preflight requests. A UI served from another local
 development server—or opened directly as an HTML file—can therefore call it at
 `http://localhost:4000` without additional proxy configuration.
 
-A dependency-free client is available at `api/priv/demo.html` and served by the
-API at `/demo`. Match creation is explicit, and a second browser window can load
-the displayed match ID to interact with the same match actor.
+A dependency-free client is packaged at `api/priv/demo.html` and served by the
+API at `/demo`. It currently calls the deployed Render API, including when the
+HTML is served by a local API process. Match creation is explicit, and a second
+browser window can load the displayed match ID to interact with the same match
+actor.
+
+The deployed proof of concept is available at:
+
+- [Browser demo](https://gleam-tennis-api.onrender.com/demo)
+- [Health check](https://gleam-tennis-api.onrender.com/health)
+
+The API routes are:
+
+```text
+GET  /health
+GET  /demo
+POST /matches
+GET  /matches/:id
+POST /matches/:id/points
+POST /matches/:id/undo
+POST /matches/:id/redo
+```
 
 ## Deploying the API to Render
 
