@@ -108,8 +108,8 @@ fn handle_message(
   }
 }
 
-fn replay(events: List(Player)) -> Snapshot {
-  list.fold(events, InProgress(match.initial()), advance)
+fn replay(points: List(Player)) -> Snapshot {
+  list.fold(points, InProgress(match.initial()), advance)
 }
 
 fn advance(snapshot: Snapshot, player: Player) -> Snapshot {

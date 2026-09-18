@@ -30,7 +30,7 @@ pub fn point_won(match: Match, by player: Player) -> MatchResult {
 
     set.SetWon(completed_set, next_server) -> {
       let updated_sets = list.append(completed_sets, [completed_set])
-      let winner = set.completed_winner(completed_set)
+      let winner = set.winner(completed_set)
 
       case sets_won_by(updated_sets, winner) == 2 {
         True -> MatchWon(CompletedMatch(winner, updated_sets))
@@ -54,6 +54,6 @@ pub fn server(match: Match) -> Player {
 
 fn sets_won_by(sets: List(set.CompletedSet), player: Player) -> Int {
   sets
-  |> list.filter(fn(completed) { set.completed_winner(completed) == player })
+  |> list.filter(fn(completed) { set.winner(completed) == player })
   |> list.length
 }

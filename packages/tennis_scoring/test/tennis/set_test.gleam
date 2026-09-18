@@ -25,11 +25,11 @@ pub fn server_alternates_after_a_regular_game_test() {
   |> should.equal(PlayerTwo)
 }
 
-pub fn current_game_exposes_the_regular_game_score_test() {
+pub fn point_score_exposes_the_regular_game_score_test() {
   let current_set = set.initial(PlayerOne)
 
-  set.current_game(current_set)
-  |> should.equal(set.RegularGame(game.LoveAll))
+  set.point_score(current_set)
+  |> should.equal(set.RegularGame(game.GameScoreText("0", "0")))
 }
 
 pub fn set_is_won_at_six_games_with_a_two_game_lead_test() {

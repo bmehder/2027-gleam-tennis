@@ -6,7 +6,7 @@ import tennis/match
 import tennis/player.{PlayerOne}
 import tennis/set
 
-pub fn matches_have_independent_event_logs_test() {
+pub fn matches_have_independent_timelines_test() {
   let assert Ok(registry) = match_registry.start()
   let assert Ok(match_registry.CreatedMatch(_, first)) =
     match_registry.create(registry)
@@ -15,20 +15,18 @@ pub fn matches_have_independent_event_logs_test() {
 
   let assert Ok(_) = match_store.point_won(first, PlayerOne)
 
-  current_game(first)
-  |> game.score_text
+  point_score(first)
   |> should.equal(game.GameScoreText("15", "0"))
 
-  current_game(second)
-  |> game.score_text
+  point_score(second)
   |> should.equal(game.GameScoreText("0", "0"))
 }
 
-fn current_game(store: match_store.Store) -> game.Game {
+fn point_score(store: match_store.Store) -> game.GameScoreText {
   let assert match_store.InProgress(current_match) = match_store.current(store)
-  let assert set.RegularGame(current_game) =
+  let assert set.RegularGame(score) =
     current_match
     |> match.current_set
-    |> set.current_game
-  current_game
+    |> set.point_score
+  score
 }

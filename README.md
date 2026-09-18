@@ -4,6 +4,10 @@ A tennis scoring project built with [Gleam](https://gleam.run/), with a
 [Lustre](https://lustre.build/) browser application and a small
 [Mist](https://hexdocs.pm/mist/) REST API running on the BEAM.
 
+- [Lustre application](https://2027-gleam-tennis.vercel.app/)
+- [REST API demo](https://gleam-tennis-api.onrender.com/demo)
+- [GitHub repository](https://github.com/bmehder/2027-gleam-tennis)
+
 This is the third version of the same idea. Earlier versions were written in
 Elm and in TypeScript with fp-ts. Rebuilding it in Gleam was an experiment in
 how clearly a small but rule-heavy domain could be modeled without sacrificing
@@ -55,6 +59,20 @@ The `Set` module is intentionally the busiest part of the domain. It coordinates
 regular games and tiebreaks, updates the game count, changes servers, and decides
 whether to begin another game, begin a tiebreak, or complete the set. `Match`
 then stays small because it only needs to coordinate completed sets.
+
+The public vocabulary is consistent across the state machines:
+
+- `game.point_won`, `tiebreak.point_won`, `set.point_won`, and
+  `match.point_won` advance their respective states.
+- `game.score`, `tiebreak.score`, and `set.score` expose the score appropriate
+  to each level.
+- `set.point_score` exposes either the regular-game score or tiebreak score
+  currently shown within a set, without exposing the set's internal game.
+- `set.winner` reads the winner from a completed set.
+
+That naming is intentionally module-oriented. At a call site, `set.score(value)`
+or `game.score(value)` says both which layer owns the operation and what is being
+requested.
 
 ## From `lustre.simple` to `lustre.application`
 
@@ -205,6 +223,18 @@ The browser package therefore sees only browser dependencies, the API package
 sees only BEAM dependencies, and the scoring package can be tested on either
 target without either application.
 
+## Requirements
+
+The project currently uses:
+
+- Gleam 1.18.1
+- Bun 1.4.2 for Lustre's JavaScript bundle and JavaScript-targeted tests
+- Erlang/OTP for the API and Erlang-targeted scoring tests
+
+The Docker image used for deployment pins Gleam 1.18.1 and includes its Erlang
+runtime. Local development requires Gleam and Erlang; Bun is also required to
+build or run the Lustre application with this repository's configuration.
+
 ## Development
 
 Start the Lustre development server:
@@ -219,12 +249,17 @@ Run the tests:
 gleam test
 ```
 
+This exercises the Lustre application and browser-facing timeline logic.
+
 Run the scoring-library tests from `packages/tennis_scoring`:
 
 ```sh
 gleam test --target javascript --runtime bun
 gleam test --target erlang
 ```
+
+Running the scoring tests on both targets verifies that the shared domain model
+behaves the same when compiled to JavaScript and Erlang.
 
 Run the API tests or start the local API from `api`:
 
@@ -283,6 +318,53 @@ POST /matches/:id/points
 POST /matches/:id/undo
 POST /matches/:id/redo
 ```
+
+Creating a match returns its generated ID and initial snapshot:
+
+```json
+{
+  "id": "match-1",
+  "match": {
+    "status": "in_progress",
+    "server": "player_one",
+    "sets": [],
+    "games": { "player_one": 0, "player_two": 0 },
+    "phase": "regular_game",
+    "points": { "player_one": "0", "player_two": "0" },
+    "winner": null
+  }
+}
+```
+
+Reading a match, awarding a point, undoing, and redoing return the updated match
+snapshot directly. Completed snapshots set `server`, `games`, `phase`, and
+`points` to `null`, populate `winner`, and retain the completed sets.
+
+The API uses conventional response statuses:
+
+- `201 Created` when a match is created
+- `200 OK` for a successful read, point, undo, or redo
+- `204 No Content` for a CORS preflight request
+- `400 Bad Request` for an invalid point-winner body
+- `404 Not Found` for an unknown route or match ID
+- `409 Conflict` when a match is complete or no undo/redo move is available
+
+The API and browser app deliberately have different persistence behavior. The
+Lustre app stores its timeline in the browser and can import or export it. API
+matches live only in BEAM actors and disappear whenever the API process stops.
+
+## Verification
+
+A useful manual smoke test for the Lustre application is to score regular
+games, reach a 6–6 tiebreak, complete a best-of-three match, move backward and
+forward across game or set boundaries, reload the page, and export then import
+the timeline.
+
+For the API, create two matches, award points independently, complete a game to
+confirm that the server changes, undo and redo across that game boundary, then
+award a different point after undoing to confirm that the redo path is cleared.
+The automated suites cover the detailed game, tiebreak, set, match, timeline,
+actor, registry, and JSON behavior.
 
 ## Deploying the API to Render
 

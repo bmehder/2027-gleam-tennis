@@ -40,12 +40,12 @@ pub fn a_game_can_be_won_before_or_after_deuce_test() {
 }
 
 pub fn regular_game_scores_have_a_text_projection_test() {
-  game.score_text(game.LoveAll)
+  game.score(game.LoveAll)
   |> should.equal(game.GameScoreText("0", "0"))
 
-  game.score_text(game.Advantage(PlayerOne))
+  game.score(game.Advantage(PlayerOne))
   |> should.equal(game.GameScoreText("AD", "40"))
 
-  game.score_text(game.Advantage(PlayerTwo))
+  game.score(game.Advantage(PlayerTwo))
   |> should.equal(game.GameScoreText("40", "AD"))
 }

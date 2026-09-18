@@ -76,7 +76,7 @@ pub fn point_won(game: Game, by player: Player) -> GameResult {
   }
 }
 
-pub fn score_text(game: Game) -> GameScoreText {
+pub fn score(game: Game) -> GameScoreText {
   case game {
     LoveAll -> GameScoreText("0", "0")
     FifteenLove -> GameScoreText("15", "0")

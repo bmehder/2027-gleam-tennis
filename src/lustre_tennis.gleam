@@ -17,8 +17,8 @@ import tennis/tiebreak
 import time_travel
 
 type MatchState {
-  Playing(match.Match)
-  Finished(match.CompletedMatch)
+  MatchInProgress(match.Match)
+  MatchCompleted(match.CompletedMatch)
 }
 
 type Model {
@@ -72,8 +72,8 @@ type Scoreboard {
 }
 
 type ScoreboardStatus {
-  MatchInProgress
-  MatchComplete
+  ScoreboardInProgress
+  ScoreboardCompleted
 }
 
 type ControlAvailability {
@@ -89,6 +89,10 @@ type SetCell {
   SetCell(games: String, tiebreak_points: String)
 }
 
+type PointScoreText {
+  PointScoreText(player_one: String, player_two: String)
+}
+
 pub fn main() -> Nil {
   let app = lustre.application(init, update, view)
   let assert Ok(_) = lustre.start(app, "#tennis-match", Nil)
@@ -97,7 +101,7 @@ pub fn main() -> Nil {
 
 fn init(_arguments) -> #(Model, Effect(Msg)) {
   #(
-    Model(Playing(match.initial()), [], [], ImportOkay),
+    Model(MatchInProgress(match.initial()), [], [], ImportOkay),
     effect.from(fn(dispatch) {
       local_storage.load()
       |> StoredTimelineLoaded
@@ -110,14 +114,14 @@ fn update(model: Model, message: Msg) -> #(Model, Effect(Msg)) {
   let Model(state, past, future, _) = model
 
   case state, message {
-    Playing(_), UserAwardedPoint(player) -> {
+    MatchInProgress(_), UserAwardedPoint(player) -> {
       let next_past = list.append(past, [player])
       let next_model =
         Model(award_point(state, player), next_past, [], ImportOkay)
       #(next_model, save_timeline(next_past, []))
     }
 
-    Finished(_), UserAwardedPoint(_) -> #(model, effect.none())
+    MatchCompleted(_), UserAwardedPoint(_) -> #(model, effect.none())
 
     _, UserChoseUndo -> undo(model)
 
@@ -143,7 +147,7 @@ fn update(model: Model, message: Msg) -> #(Model, Effect(Msg)) {
     )
 
     _, UserStartedNewMatch -> #(
-      Model(Playing(match.initial()), [], [], ImportOkay),
+      Model(MatchInProgress(match.initial()), [], [], ImportOkay),
       effect.from(fn(_) { local_storage.clear() }),
     )
 
@@ -161,8 +165,8 @@ fn update(model: Model, message: Msg) -> #(Model, Effect(Msg)) {
 fn view(model: Model) -> Element(Msg) {
   let Model(state, past, future, import_status) = model
   let scoreboard = case state {
-    Playing(current_match) -> to_playing_scoreboard(current_match)
-    Finished(completed_match) -> to_finished_scoreboard(completed_match)
+    MatchInProgress(current_match) -> to_in_progress_scoreboard(current_match)
+    MatchCompleted(completed_match) -> to_completed_scoreboard(completed_match)
   }
 
   view_scoreboard(
@@ -175,18 +179,18 @@ fn view(model: Model) -> Element(Msg) {
 
 fn award_point(state: MatchState, player: Player) -> MatchState {
   case state {
-    Playing(current_match) ->
+    MatchInProgress(current_match) ->
       case match.point_won(current_match, player) {
-        match.MatchContinues(next_match) -> Playing(next_match)
-        match.MatchWon(completed_match) -> Finished(completed_match)
+        match.MatchContinues(next_match) -> MatchInProgress(next_match)
+        match.MatchWon(completed_match) -> MatchCompleted(completed_match)
       }
 
-    Finished(_) -> state
+    MatchCompleted(_) -> state
   }
 }
 
 fn replay(past: List(Player), future: List(Player)) -> Model {
-  let state = list.fold(past, Playing(match.initial()), award_point)
+  let state = list.fold(past, MatchInProgress(match.initial()), award_point)
   Model(state, past, future, ImportOkay)
 }
 
@@ -230,14 +234,14 @@ fn import_timeline(model: Model, contents: String) -> #(Model, Effect(Msg)) {
 }
 
 fn timeline_is_valid(past: List(Player), future: List(Player)) -> Bool {
-  can_replay(Playing(match.initial()), list.append(past, future))
+  can_replay(MatchInProgress(match.initial()), list.append(past, future))
 }
 
 fn can_replay(state: MatchState, points: List(Player)) -> Bool {
   case state, points {
     _, [] -> True
-    Finished(_), [_, ..] -> False
-    Playing(_), [player, ..remaining] ->
+    MatchCompleted(_), [_, ..] -> False
+    MatchInProgress(_), [player, ..remaining] ->
       can_replay(award_point(state, player), remaining)
   }
 }
@@ -282,12 +286,12 @@ fn view_scoreboard(
       player_row(player_two),
     ]),
     case status {
-      MatchComplete ->
+      ScoreboardCompleted ->
         html.button(
           [attribute.class("new-match"), event.on_click(UserStartedNewMatch)],
           [html.text("Start a new match")],
         )
-      MatchInProgress -> point_controls(player_one, player_two)
+      ScoreboardInProgress -> point_controls(player_one, player_two)
     },
     time_travel_controls(undo, redo),
     file_controls(import_status),
@@ -413,9 +417,10 @@ fn set_cell(cell: SetCell) -> Element(msg) {
   ])
 }
 
-fn to_playing_scoreboard(current_match: match.Match) -> Scoreboard {
+fn to_in_progress_scoreboard(current_match: match.Match) -> Scoreboard {
   let current_set = match.current_set(current_match)
-  let #(player_one_points, player_two_points) = point_scores(current_set)
+  let PointScoreText(player_one_points, player_two_points) =
+    point_score_text(current_set)
   let server = match.server(current_match)
   let completed_sets = match.completed_sets(current_match)
 
@@ -423,22 +428,24 @@ fn to_playing_scoreboard(current_match: match.Match) -> Scoreboard {
     player_one: PlayerScore(
       player: PlayerOne,
       name: player_name(PlayerOne),
-      sets: playing_set_columns(completed_sets, current_set, PlayerOne),
+      sets: in_progress_set_columns(completed_sets, current_set, PlayerOne),
       points: player_one_points,
-      status: playing_player_status(PlayerOne, server),
+      status: in_progress_player_status(PlayerOne, server),
     ),
     player_two: PlayerScore(
       player: PlayerTwo,
       name: player_name(PlayerTwo),
-      sets: playing_set_columns(completed_sets, current_set, PlayerTwo),
+      sets: in_progress_set_columns(completed_sets, current_set, PlayerTwo),
       points: player_two_points,
-      status: playing_player_status(PlayerTwo, server),
+      status: in_progress_player_status(PlayerTwo, server),
     ),
-    status: MatchInProgress,
+    status: ScoreboardInProgress,
   )
 }
 
-fn to_finished_scoreboard(completed_match: match.CompletedMatch) -> Scoreboard {
+fn to_completed_scoreboard(
+  completed_match: match.CompletedMatch,
+) -> Scoreboard {
   let match.CompletedMatch(winner, completed_sets) = completed_match
 
   Scoreboard(
@@ -456,11 +463,11 @@ fn to_finished_scoreboard(completed_match: match.CompletedMatch) -> Scoreboard {
       points: "–",
       status: completed_player_status(PlayerTwo, winner),
     ),
-    status: MatchComplete,
+    status: ScoreboardCompleted,
   )
 }
 
-fn playing_player_status(player: Player, server: Player) -> PlayerStatus {
+fn in_progress_player_status(player: Player, server: Player) -> PlayerStatus {
   case player == server {
     True -> CurrentServer
     False -> Unmarked
@@ -474,7 +481,7 @@ fn completed_player_status(player: Player, winner: Player) -> PlayerStatus {
   }
 }
 
-fn playing_set_columns(
+fn in_progress_set_columns(
   completed_sets: List(set.CompletedSet),
   current_set: set.Set,
   player: Player,
@@ -539,17 +546,15 @@ fn for_player(player: Player, player_one: value, player_two: value) -> value {
   }
 }
 
-fn point_scores(current_set: set.Set) -> #(String, String) {
-  case set.current_game(current_set) {
-    set.RegularGame(current_game) -> {
-      let game.GameScoreText(player_one, player_two) =
-        game.score_text(current_game)
-      #(player_one, player_two)
+fn point_score_text(current_set: set.Set) -> PointScoreText {
+  case set.point_score(current_set) {
+    set.RegularGame(game.GameScoreText(player_one, player_two)) -> {
+      PointScoreText(player_one, player_two)
     }
 
     set.Tiebreak(current_tiebreak) -> {
       let tiebreak.TiebreakScore(player_one, player_two) = current_tiebreak
-      #(int.to_string(player_one), int.to_string(player_two))
+      PointScoreText(int.to_string(player_one), int.to_string(player_two))
     }
   }
 }

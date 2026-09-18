@@ -50,14 +50,24 @@ fn handle_request(
     Post, ["matches", id, "points"] ->
       award_point(request, registry, match_id.from_string(id))
     Post, ["matches", id, "undo"] ->
-      time_travel(registry, match_id.from_string(id), match_store.undo, "undo")
+      move_through_timeline(
+        registry,
+        match_id.from_string(id),
+        match_store.undo,
+        "undo",
+      )
     Post, ["matches", id, "redo"] ->
-      time_travel(registry, match_id.from_string(id), match_store.redo, "redo")
+      move_through_timeline(
+        registry,
+        match_id.from_string(id),
+        match_store.redo,
+        "redo",
+      )
     _, _ -> not_found()
   }
 }
 
-fn time_travel(
+fn move_through_timeline(
   registry: match_registry.Registry,
   id: match_id.MatchId,
   move: fn(match_store.Store) -> Result(match_store.Snapshot, Nil),

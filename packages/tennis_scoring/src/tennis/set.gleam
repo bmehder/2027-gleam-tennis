@@ -26,9 +26,9 @@ pub type SetResult {
   SetWon(completed: CompletedSet, next_server: Player)
 }
 
-/// The point-scoring phase currently displayed within a set.
-pub type CurrentGame {
-  RegularGame(game.Game)
+/// The point score currently displayed within a set.
+pub type PointScore {
+  RegularGame(game.GameScoreText)
   Tiebreak(tiebreak.TiebreakScore)
 }
 
@@ -71,15 +71,15 @@ pub fn is_tiebreak(current_set: Set) -> Bool {
   }
 }
 
-pub fn current_game(current_set: Set) -> CurrentGame {
+pub fn point_score(current_set: Set) -> PointScore {
   case current_set {
-    PlayingGame(_, game, _) -> RegularGame(game)
+    PlayingGame(_, current_game, _) -> RegularGame(game.score(current_game))
     PlayingTiebreak(current_tiebreak) ->
       Tiebreak(tiebreak.score(current_tiebreak))
   }
 }
 
-pub fn completed_winner(completed: CompletedSet) -> Player {
+pub fn winner(completed: CompletedSet) -> Player {
   case completed {
     RegularSet(winner, _) -> winner
     TiebreakSet(winner, _, _) -> winner

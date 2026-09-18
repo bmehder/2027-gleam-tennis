@@ -4949,7 +4949,7 @@ function point_won(game, player) {
     }
   }
 }
-function score_text(game) {
+function score(game) {
   if (game instanceof LoveAll) {
     return new GameScoreText("0", "0");
   } else if (game instanceof FifteenLove) {
@@ -5061,7 +5061,7 @@ function point_won2(tiebreak, player) {
     return new TiebreakContinues(new Tiebreak(updated_score, first_server));
   }
 }
-function score(tiebreak) {
+function score2(tiebreak) {
   return tiebreak.score;
 }
 function server(tiebreak) {
@@ -5154,17 +5154,17 @@ function after_tiebreak_point(result) {
     let next_tiebreak = result[0];
     return new SetContinues(new PlayingTiebreak(next_tiebreak));
   } else {
-    let winner = result.winner;
+    let winner$1 = result.winner;
     let tiebreak_score = result.score;
     let first_server = result.first_server;
     let _block;
-    if (winner instanceof PlayerOne) {
+    if (winner$1 instanceof PlayerOne) {
       _block = new SetScore(7, 6);
     } else {
       _block = new SetScore(6, 7);
     }
     let final_score = _block;
-    return new SetWon(new TiebreakSet(winner, final_score, tiebreak_score), opponent(first_server));
+    return new SetWon(new TiebreakSet(winner$1, final_score, tiebreak_score), opponent(first_server));
   }
 }
 function is_set_won_by(score, player) {
@@ -5217,22 +5217,22 @@ function after_regular_game_point(score, server, result) {
     let next_game = result[0];
     return new SetContinues(new PlayingGame(score, next_game, server));
   } else {
-    let winner = result[0];
-    return after_game_won(score, server, winner);
+    let winner$1 = result[0];
+    return after_game_won(score, server, winner$1);
   }
 }
 function point_won3(current_set, player) {
   if (current_set instanceof PlayingGame) {
     let score$1 = current_set.score;
-    let current_game$1 = current_set.game;
+    let current_game = current_set.game;
     let server$1 = current_set.server;
-    return after_regular_game_point(score$1, server$1, point_won(current_game$1, player));
+    return after_regular_game_point(score$1, server$1, point_won(current_game, player));
   } else {
     let current_tiebreak = current_set.tiebreak;
     return after_tiebreak_point(point_won2(current_tiebreak, player));
   }
 }
-function score2(current_set) {
+function score3(current_set) {
   if (current_set instanceof PlayingGame) {
     let score$1 = current_set.score;
     return score$1;
@@ -5249,22 +5249,22 @@ function server2(current_set) {
     return server(current_tiebreak);
   }
 }
-function current_game(current_set) {
+function point_score(current_set) {
   if (current_set instanceof PlayingGame) {
-    let game = current_set.game;
-    return new RegularGame(game);
+    let current_game = current_set.game;
+    return new RegularGame(score(current_game));
   } else {
     let current_tiebreak = current_set.tiebreak;
-    return new Tiebreak2(score(current_tiebreak));
+    return new Tiebreak2(score2(current_tiebreak));
   }
 }
-function completed_winner(completed) {
+function winner(completed) {
   if (completed instanceof RegularSet) {
-    let winner = completed.winner;
-    return winner;
+    let winner$1 = completed.winner;
+    return winner$1;
   } else {
-    let winner = completed.winner;
-    return winner;
+    let winner$1 = completed.winner;
+    return winner$1;
   }
 }
 
@@ -5302,7 +5302,7 @@ function initial4() {
 function sets_won_by(sets, player) {
   let _pipe = sets;
   let _pipe$1 = filter(_pipe, (completed) => {
-    return isEqual(completed_winner(completed), player);
+    return isEqual(winner(completed), player);
   });
   return length(_pipe$1);
 }
@@ -5317,10 +5317,10 @@ function point_won4(match, player) {
     let completed_set = $.completed;
     let next_server = $.next_server;
     let updated_sets = append(completed_sets$1, toList([completed_set]));
-    let winner = completed_winner(completed_set);
-    let $1 = sets_won_by(updated_sets, winner) === 2;
+    let winner2 = winner(completed_set);
+    let $1 = sets_won_by(updated_sets, winner2) === 2;
     if ($1) {
-      return new MatchWon(new CompletedMatch(winner, updated_sets));
+      return new MatchWon(new CompletedMatch(winner2, updated_sets));
     } else {
       return new MatchContinues(new Match(updated_sets, initial3(next_server)));
     }
@@ -5481,14 +5481,14 @@ function clear() {
 // build/dev/javascript/lustre_tennis/lustre_tennis.mjs
 var FILEPATH = "src/lustre_tennis.gleam";
 
-class Playing extends CustomType {
+class MatchInProgress extends CustomType {
   constructor($0) {
     super();
     this[0] = $0;
   }
 }
 
-class Finished extends CustomType {
+class MatchCompleted extends CustomType {
   constructor($0) {
     super();
     this[0] = $0;
@@ -5590,13 +5590,13 @@ class Scoreboard extends CustomType {
   }
 }
 
-class MatchInProgress extends CustomType {
+class ScoreboardInProgress extends CustomType {
 }
-var ScoreboardStatus$MatchInProgress$const = new MatchInProgress;
+var ScoreboardStatus$ScoreboardInProgress$const = new ScoreboardInProgress;
 
-class MatchComplete extends CustomType {
+class ScoreboardCompleted extends CustomType {
 }
-var ScoreboardStatus$MatchComplete$const = new MatchComplete;
+var ScoreboardStatus$ScoreboardCompleted$const = new ScoreboardCompleted;
 
 class Available extends CustomType {
 }
@@ -5620,6 +5620,14 @@ class SetCell extends CustomType {
     super();
     this.games = games;
     this.tiebreak_points = tiebreak_points;
+  }
+}
+
+class PointScoreText extends CustomType {
+  constructor(player_one, player_two) {
+    super();
+    this.player_one = player_one;
+    this.player_two = player_two;
   }
 }
 function control_availability(items) {
@@ -5755,7 +5763,7 @@ function view_scoreboard(scoreboard, undo, redo, import_status) {
       player_row(player_two)
     ])),
     (() => {
-      if (status instanceof MatchInProgress) {
+      if (status instanceof ScoreboardInProgress) {
         return point_controls(player_one, player_two);
       } else {
         return button(toList([
@@ -5849,12 +5857,12 @@ function player_name(player) {
     return "Player Two";
   }
 }
-function to_finished_scoreboard(completed_match) {
+function to_completed_scoreboard(completed_match) {
   let winner = completed_match.winner;
   let completed_sets = completed_match.sets;
-  return new Scoreboard(new PlayerScore(Player$PlayerOne$const, player_name(Player$PlayerOne$const), completed_set_columns(completed_sets, Player$PlayerOne$const), "–", completed_player_status(Player$PlayerOne$const, winner)), new PlayerScore(Player$PlayerTwo$const, player_name(Player$PlayerTwo$const), completed_set_columns(completed_sets, Player$PlayerTwo$const), "–", completed_player_status(Player$PlayerTwo$const, winner)), ScoreboardStatus$MatchComplete$const);
+  return new Scoreboard(new PlayerScore(Player$PlayerOne$const, player_name(Player$PlayerOne$const), completed_set_columns(completed_sets, Player$PlayerOne$const), "–", completed_player_status(Player$PlayerOne$const, winner)), new PlayerScore(Player$PlayerTwo$const, player_name(Player$PlayerTwo$const), completed_set_columns(completed_sets, Player$PlayerTwo$const), "–", completed_player_status(Player$PlayerTwo$const, winner)), ScoreboardStatus$ScoreboardCompleted$const);
 }
-function playing_player_status(player, server) {
+function in_progress_player_status(player, server) {
   let $ = isEqual(player, server);
   if ($) {
     return PlayerStatus$CurrentServer$const;
@@ -5863,12 +5871,12 @@ function playing_player_status(player, server) {
   }
 }
 function current_set_cell(current_set, player) {
-  let $ = score2(current_set);
+  let $ = score3(current_set);
   let player_one = $.player_one;
   let player_two = $.player_two;
   return new SetCell(to_string(for_player(player, player_one, player_two)), "");
 }
-function playing_set_columns(completed_sets, current_set, player) {
+function in_progress_set_columns(completed_sets, current_set, player) {
   let _pipe = completed_sets;
   let _pipe$1 = map2(_pipe, (_capture) => {
     return completed_set_cell(_capture, player);
@@ -5876,29 +5884,27 @@ function playing_set_columns(completed_sets, current_set, player) {
   let _pipe$2 = append(_pipe$1, toList([current_set_cell(current_set, player)]));
   return to_set_columns(_pipe$2);
 }
-function point_scores(current_set) {
-  let $ = current_game(current_set);
+function point_score_text(current_set) {
+  let $ = point_score(current_set);
   if ($ instanceof RegularGame) {
-    let current_game = $[0];
-    let $1 = score_text(current_game);
-    let player_one = $1.player_one;
-    let player_two = $1.player_two;
-    return [player_one, player_two];
+    let player_one = $[0].player_one;
+    let player_two = $[0].player_two;
+    return new PointScoreText(player_one, player_two);
   } else {
     let current_tiebreak = $[0];
     let player_one = current_tiebreak.player_one;
     let player_two = current_tiebreak.player_two;
-    return [to_string(player_one), to_string(player_two)];
+    return new PointScoreText(to_string(player_one), to_string(player_two));
   }
 }
-function to_playing_scoreboard(current_match) {
+function to_in_progress_scoreboard(current_match) {
   let current_set2 = current_set(current_match);
-  let $ = point_scores(current_set2);
-  let player_one_points = $[0];
-  let player_two_points = $[1];
+  let $ = point_score_text(current_set2);
+  let player_one_points = $.player_one;
+  let player_two_points = $.player_two;
   let server = server3(current_match);
   let completed_sets2 = completed_sets(current_match);
-  return new Scoreboard(new PlayerScore(Player$PlayerOne$const, player_name(Player$PlayerOne$const), playing_set_columns(completed_sets2, current_set2, Player$PlayerOne$const), player_one_points, playing_player_status(Player$PlayerOne$const, server)), new PlayerScore(Player$PlayerTwo$const, player_name(Player$PlayerTwo$const), playing_set_columns(completed_sets2, current_set2, Player$PlayerTwo$const), player_two_points, playing_player_status(Player$PlayerTwo$const, server)), ScoreboardStatus$MatchInProgress$const);
+  return new Scoreboard(new PlayerScore(Player$PlayerOne$const, player_name(Player$PlayerOne$const), in_progress_set_columns(completed_sets2, current_set2, Player$PlayerOne$const), player_one_points, in_progress_player_status(Player$PlayerOne$const, server)), new PlayerScore(Player$PlayerTwo$const, player_name(Player$PlayerTwo$const), in_progress_set_columns(completed_sets2, current_set2, Player$PlayerTwo$const), player_two_points, in_progress_player_status(Player$PlayerTwo$const, server)), ScoreboardStatus$ScoreboardInProgress$const);
 }
 function view(model) {
   let state = model.state;
@@ -5906,33 +5912,33 @@ function view(model) {
   let future = model.future;
   let import_status = model.import_status;
   let _block;
-  if (state instanceof Playing) {
+  if (state instanceof MatchInProgress) {
     let current_match = state[0];
-    _block = to_playing_scoreboard(current_match);
+    _block = to_in_progress_scoreboard(current_match);
   } else {
     let completed_match = state[0];
-    _block = to_finished_scoreboard(completed_match);
+    _block = to_completed_scoreboard(completed_match);
   }
   let scoreboard = _block;
   return view_scoreboard(scoreboard, control_availability(past), control_availability(future), import_status);
 }
 function award_point(state, player) {
-  if (state instanceof Playing) {
+  if (state instanceof MatchInProgress) {
     let current_match = state[0];
     let $ = point_won4(current_match, player);
     if ($ instanceof MatchContinues) {
       let next_match = $[0];
-      return new Playing(next_match);
+      return new MatchInProgress(next_match);
     } else {
       let completed_match = $[0];
-      return new Finished(completed_match);
+      return new MatchCompleted(completed_match);
     }
   } else {
     return state;
   }
 }
 function replay(past, future) {
-  let state = fold2(past, new Playing(initial4()), award_point);
+  let state = fold2(past, new MatchInProgress(initial4()), award_point);
   return new Model(state, past, future, ImportStatus$ImportOkay$const);
 }
 function with_import_error(model) {
@@ -5947,7 +5953,7 @@ function can_replay(loop$state, loop$points) {
     let points = loop$points;
     if (points instanceof Empty) {
       return true;
-    } else if (state instanceof Playing) {
+    } else if (state instanceof MatchInProgress) {
       let player = points.head;
       let remaining = points.tail;
       loop$state = award_point(state, player);
@@ -5958,7 +5964,7 @@ function can_replay(loop$state, loop$points) {
   }
 }
 function timeline_is_valid(past, future) {
-  return can_replay(new Playing(initial4()), append(past, future));
+  return can_replay(new MatchInProgress(initial4()), append(past, future));
 }
 function import_timeline(model, contents) {
   let $ = deserialize(contents);
@@ -6019,7 +6025,7 @@ function update2(model, message) {
   let state = model.state;
   let past = model.past;
   let future = model.future;
-  if (state instanceof Playing) {
+  if (state instanceof MatchInProgress) {
     if (message instanceof UserAwardedPoint) {
       let player = message[0];
       let next_past = append(past, toList([player]));
@@ -6053,7 +6059,7 @@ function update2(model, message) {
       ];
     } else if (message instanceof UserStartedNewMatch) {
       return [
-        new Model(new Playing(initial4()), List$Empty$const, List$Empty$const, ImportStatus$ImportOkay$const),
+        new Model(new MatchInProgress(initial4()), List$Empty$const, List$Empty$const, ImportStatus$ImportOkay$const),
         from2((_) => {
           return clear();
         })
@@ -6098,7 +6104,7 @@ function update2(model, message) {
     ];
   } else if (message instanceof UserStartedNewMatch) {
     return [
-      new Model(new Playing(initial4()), List$Empty$const, List$Empty$const, ImportStatus$ImportOkay$const),
+      new Model(new MatchInProgress(initial4()), List$Empty$const, List$Empty$const, ImportStatus$ImportOkay$const),
       from2((_) => {
         return clear();
       })
@@ -6116,7 +6122,7 @@ function update2(model, message) {
 }
 function init(_) {
   return [
-    new Model(new Playing(initial4()), List$Empty$const, List$Empty$const, ImportStatus$ImportOkay$const),
+    new Model(new MatchInProgress(initial4()), List$Empty$const, List$Empty$const, ImportStatus$ImportOkay$const),
     from2((dispatch) => {
       let _pipe = load2();
       let _pipe$1 = new StoredTimelineLoaded(_pipe);
@@ -6128,12 +6134,12 @@ function main2() {
   let app = application(init, update2, view);
   let $ = start4(app, "#tennis-match", undefined);
   if (!($ instanceof Ok)) {
-    throw makeError("let_assert", FILEPATH, "lustre_tennis", 94, "main", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH, "lustre_tennis", 98, "main", "Pattern match failed, no pattern matched the value.", {
       value: $,
-      start: 1604,
-      end: 1662,
-      pattern_start: 1615,
-      pattern_end: 1620
+      start: 1711,
+      end: 1769,
+      pattern_start: 1722,
+      pattern_end: 1727
     });
   }
   return;
